@@ -75,7 +75,7 @@ export default function ShipmentPage() {
   return (
     <div className="space-y-0">
       <section className="intro-grid" id="shipment">
-        <Card className="field-log gap-0 !p-0 overflow-hidden bg-white border-[#cbd2c6] rounded-[10px] shadow-[0_8px_24px_rgba(23,32,25,0.08)]">
+        <Card className="field-log gap-0 !p-0 overflow-hidden bg-white dark:bg-[#171c19] border-[#cbd2c6] dark:border-[#2a352f] rounded-[10px] shadow-[0_8px_24px_rgba(23,32,25,0.08)] dark:shadow-[0_8px_24px_rgba(0,0,0,0.32)]">
           <CardContent className="p-0">
             <div className="p-[22px_20px_14px]">
               <div className="flex items-start justify-between gap-2">
@@ -84,26 +84,26 @@ export default function ShipmentPage() {
                   {status === "SAFE" ? <ShieldCheck size={10} /> : <ShieldAlert size={10} />} {status}
                 </Badge>
               </div>
-              <div className="log-rule border-t-[1.5px] border-[#e0e6dd] mt-[14px] mb-[2px]" />
+              <div className="log-rule border-t-[1.5px] border-[#e0e6dd] dark:border-[#2a352f] mt-[14px] mb-[2px]" />
               <dl className="m-0">
-                <div className="py-[12px] border-b border-[#e6ebe4] flex flex-col gap-1">
+                <div className="py-[12px] border-b border-[#e6ebe4] dark:border-[#2a352f] flex flex-col gap-1">
                   <dt className="font-mono text-[8px] font-bold text-[#267e79] tracking-[0.14em] uppercase">BOX</dt>
                   <dd className="font-mono text-[10.5px] font-semibold text-[#172019] flex items-center justify-between gap-2">
                     {fieldLogMeta.box}
-                    <button onClick={handleCopy} className="p-1 rounded hover:bg-[#f7f8f4] transition-colors" aria-label="Copy box">
+                    <button onClick={handleCopy} className="p-1 rounded hover:bg-[#f7f8f4] dark:hover:bg-[#24302c] transition-colors" aria-label="Copy box">
                       <Copy size={12} className="text-[#667068]" />
                     </button>
                   </dd>
                 </div>
-                <div className="py-[12px] border-b border-[#e6ebe4] flex flex-col gap-1">
+                <div className="py-[12px] border-b border-[#e6ebe4] dark:border-[#2a352f] flex flex-col gap-1">
                   <dt className="font-mono text-[8px] font-bold text-[#267e79] tracking-[0.14em] uppercase">PRODUCT</dt>
                   <dd className="font-mono text-[10.5px] font-semibold text-[#172019]">{fieldLogMeta.product}</dd>
                 </div>
-                <div className="py-[12px] border-b border-[#e6ebe4] flex flex-col gap-1">
+                <div className="py-[12px] border-b border-[#e6ebe4] dark:border-[#2a352f] flex flex-col gap-1">
                   <dt className="font-mono text-[8px] font-bold text-[#267e79] tracking-[0.14em] uppercase">BATCH</dt>
                   <dd className="font-mono text-[10.5px] font-semibold text-[#172019]">{fieldLogMeta.batch}</dd>
                 </div>
-                <div className="py-[12px] border-b border-[#e6ebe4] flex flex-col gap-1">
+                <div className="py-[12px] border-b border-[#e6ebe4] dark:border-[#2a352f] flex flex-col gap-1">
                   <dt className="font-mono text-[8px] font-bold text-[#267e79] tracking-[0.14em] uppercase">DOSES</dt>
                   <dd className="font-mono text-[10.5px] font-semibold text-[#172019]">{fieldLogMeta.doses}</dd>
                 </div>
@@ -112,7 +112,7 @@ export default function ShipmentPage() {
                   <dd className="font-mono text-[10.5px] font-semibold text-[#172019]">{fieldLogMeta.range}</dd>
                 </div>
               </dl>
-              <div className="log-foot font-mono bg-[#f7f8f4] border border-[#e6ebe4] rounded-md p-[10px_12px] text-[8px] leading-[1.7] mt-2 font-semibold tracking-[0.04em] text-[#172019]">
+              <div className="log-foot font-mono bg-[#f7f8f4] dark:bg-[#1c2220] border border-[#e6ebe4] dark:border-[#2a352f] rounded-md p-[10px_12px] text-[8px] leading-[1.7] mt-2 font-semibold tracking-[0.04em] text-[#172019] dark:text-[#c8d5d0]">
                 STARTED {fieldLogMeta.started}
                 <br />
                 ROUTE / {fieldLogMeta.route}
@@ -132,9 +132,9 @@ export default function ShipmentPage() {
               </div>
             </div>
 
-            <Separator />
+            <Separator className="dark:bg-[#2a352f]" />
 
-            <div className="p-3 flex flex-wrap gap-2 bg-[#fcfdfb]">
+            <div className="p-3 flex flex-wrap gap-2 bg-[#fcfdfb] dark:bg-[#1c2220] border-t border-transparent dark:border-[#2a352f]">
               <Button size="sm" onClick={() => setEditOpen(true)} className="bg-[#267e79] hover:bg-[#1d5d59] text-white font-mono text-[8px] h-7 gap-1.5 flex-1 min-w-[92px]">
                 <Pencil size={12} /> EDIT
               </Button>
@@ -149,7 +149,7 @@ export default function ShipmentPage() {
               </Button>
             </div>
 
-            <div className="px-3 pb-3">
+            <div className="px-3 pb-3 bg-white dark:bg-[#171c19]">
               <Button size="sm" variant="secondary" onClick={createNewShipment} className="w-full font-mono text-[8px] h-7 gap-1.5 bg-[#172019] text-white hover:bg-black">
                 <Plus size={12} /> NEW SHIPMENT
               </Button>
