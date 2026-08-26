@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import anime from "animejs";
 import { NavLink, Outlet, Link, useLocation } from "react-router-dom";
+import { Shield, HelpCircle } from "lucide-react";
 import { ColdChainProvider } from "./context/ColdChainContext";
 
 function Layout() {
@@ -38,7 +39,9 @@ function Layout() {
     <div className="vault-app">
       <header className="topbar">
         <Link className="brand" to="/shipment" aria-label="Vault home">
-          <span className="brand-mark">V</span>
+          <span className="brand-mark">
+            <Shield size={16} strokeWidth={2.5} aria-hidden="true" />
+          </span>
           <span>
             <strong>VAULT</strong>
             <small>COLD-CHAIN / 01</small>
@@ -61,7 +64,7 @@ function Layout() {
             <span className="mono">SIMULATED / LOCAL</span>
           </span>
           <button className="icon-button" aria-label="Open help">
-            ?
+            <HelpCircle size={14} strokeWidth={2} aria-hidden="true" />
           </button>
         </div>
       </header>

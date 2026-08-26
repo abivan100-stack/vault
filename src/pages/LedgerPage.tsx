@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import anime from "animejs";
+import { BadgeCheck, ArrowRight } from "lucide-react";
 import { useColdChain } from "../context/ColdChainContext";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
@@ -39,7 +40,7 @@ export default function LedgerPage() {
           <h2>Every reading leaves a mark.</h2>
         </div>
         <a className="text-link" href="#ledger">
-          OPEN FULL LEDGER <span aria-hidden="true">&gt;</span>
+          OPEN FULL LEDGER <ArrowRight size={12} aria-hidden="true" />
         </a>
       </div>
 
@@ -63,7 +64,7 @@ export default function LedgerPage() {
                 <TableCell className="font-mono text-[9px] text-muted-foreground">2026-08-26 / {row.time}</TableCell>
                 <TableCell>
                   <Badge variant="secondary" className="bg-[#e6f0e9] text-[#318b5d] border-[#cbd2c6] font-mono text-[9px] gap-1">
-                    <span className="h-1.5 w-1.5 rounded-full bg-[#318b5d]" />
+                    <BadgeCheck size={12} className="text-[#318b5d]" aria-hidden="true" />
                     {row.status}
                   </Badge>
                 </TableCell>

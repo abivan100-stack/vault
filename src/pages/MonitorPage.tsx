@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import anime from "animejs";
+import { Activity, Pause, Play, Clock3, ArrowRight } from "lucide-react";
 import { useColdChain } from "../context/ColdChainContext";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -79,7 +80,7 @@ export default function MonitorPage() {
         <Card className="status-panel rounded-none border-r border-[#9ea99e] border-l-0 border-t-0 border-b-0 bg-transparent shadow-none gap-0 py-0" style={{ borderRadius: 0 }}>
           <CardHeader className="status-panel-head p-0 pb-0">
             <span className="eyebrow">CURRENT STATE</span>
-            <span className="tiny-icon" aria-hidden="true">o</span>
+            <Activity size={14} className="text-[#267e79] opacity-70" aria-hidden="true" />
           </CardHeader>
           <CardContent className="flex flex-col flex-1 p-0 pt-6">
             <Badge
@@ -112,11 +113,11 @@ export default function MonitorPage() {
                   : "bg-[#267e79] hover:bg-[#1d5d59] text-white border-[#267e79]"
               }`}
             >
-              <span aria-hidden="true">{isMonitoring ? "||" : ">"}</span>
+              {isMonitoring ? <Pause size={12} aria-hidden="true" /> : <Play size={12} aria-hidden="true" />}
               {isMonitoring ? "PAUSE SIMULATION" : "RESUME SIMULATION"}
             </Button>
             <div className="panel-foot">
-              <span aria-hidden="true">o</span> SAMPLE EVERY 02 SEC <span>/</span> NEXT LEDGER APPEND 09 SEC
+              <Clock3 size={10} aria-hidden="true" /> SAMPLE EVERY 02 SEC <span>/</span> NEXT LEDGER APPEND 09 SEC
             </div>
           </CardContent>
         </Card>
@@ -174,7 +175,7 @@ export default function MonitorPage() {
             <span>NOW</span>
           </div>
           <div className={`chart-callout ${status.toLowerCase()}`}>
-            <span className="callout-marker" /> {status === "SAFE" ? "SAFE - no excursion detected in current window" : "EXCURSION - reading outside safe corridor"} <span aria-hidden="true">-&gt;</span>
+            <span className="callout-marker" /> {status === "SAFE" ? "SAFE - no excursion detected in current window" : "EXCURSION - reading outside safe corridor"} <ArrowRight size={10} aria-hidden="true" />
           </div>
         </div>
       </div>

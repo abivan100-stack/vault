@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import anime from "animejs";
+import { ShieldCheck, ShieldAlert, Thermometer, Signal } from "lucide-react";
 import { useColdChain } from "../context/ColdChainContext";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -129,13 +130,17 @@ export default function ShipmentPage() {
         <div className="orbit-ring ring-two" />
         <div className={`orbit-core ${status.toLowerCase()}`}>
           <span className="shield-glyph" aria-hidden="true">
-            {status === "SAFE" ? "OK" : "!!"}
+            {status === "SAFE" ? <ShieldCheck size={16} strokeWidth={2.2} /> : <ShieldAlert size={16} strokeWidth={2.2} />}
           </span>
           <strong>{status}</strong>
           <span>{status === "SAFE" ? "2-8 deg C corridor" : "outside corridor"}</span>
         </div>
-        <div className="orbit-label label-top mono">SENSOR / DHT22</div>
-        <div className="orbit-label label-bottom mono">SIGNAL 98%</div>
+        <div className="orbit-label label-top mono inline-flex items-center gap-1">
+          <Thermometer size={10} className="opacity-70" /> SENSOR / DHT22
+        </div>
+        <div className="orbit-label label-bottom mono inline-flex items-center gap-1">
+          <Signal size={10} className="opacity-70" /> SIGNAL 98%
+        </div>
       </div>
     </section>
   );
