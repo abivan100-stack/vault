@@ -1,4 +1,7 @@
 import { useColdChain } from "../context/ColdChainContext";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Card, CardHeader, CardContent } from "@/components/ui/card";
 
 export default function MonitorPage() {
   const { temperature, status, isMonitoring, setIsMonitoring, readings, chartPath, toChartY } = useColdChain();
@@ -16,35 +19,50 @@ export default function MonitorPage() {
       </div>
 
       <div className="monitor-grid">
-        <div className="status-panel">
-          <div className="status-panel-head">
+        <Card className="status-panel rounded-none border-r border-[#9ea99e] border-l-0 border-t-0 border-b-0 bg-transparent shadow-none gap-0 py-0" style={{ borderRadius: 0 }}>
+          <CardHeader className="status-panel-head p-0 pb-0">
             <span className="eyebrow">CURRENT STATE</span>
             <span className="tiny-icon" aria-hidden="true">o</span>
-          </div>
-          <div className={`status-word ${status.toLowerCase()}`}>{status}</div>
-          <div className="temp-reading">
-            <span>{temperature.toFixed(1)}</span>
-            <sup>deg C</sup>
-          </div>
-          <div className="status-bar">
-            <span style={{ width: `${Math.min(100, Math.max(0, ((temperature - 2) / 6) * 100))}%` }} />
-          </div>
-          <div className="status-limits">
-            <span>02.0</span>
-            <span>SAFE CORRIDOR</span>
-            <span>08.0</span>
-          </div>
-          <button
-            className={`monitor-button ${isMonitoring ? "pause" : "start"}`}
-            onClick={() => setIsMonitoring((current) => !current)}
-          >
-            <span aria-hidden="true">{isMonitoring ? "||" : ">"}</span>
-            {isMonitoring ? "PAUSE SIMULATION" : "RESUME SIMULATION"}
-          </button>
-          <div className="panel-foot">
-            <span aria-hidden="true">o</span> SAMPLE EVERY 02 SEC <span>/</span> NEXT LEDGER APPEND 09 SEC
-          </div>
-        </div>
+          </CardHeader>
+          <CardContent className="flex flex-col flex-1 p-0 pt-6">
+            <Badge
+              variant={status === "SAFE" ? "secondary" : "destructive"}
+              className={
+                status === "SAFE"
+                  ? "w-fit bg-[#e6f0e9] text-[#318b5d] border-[#cbd2c6] font-mono text-[11px] tracking-[0.16em]"
+                  : "w-fit bg-[#f9e8c9] text-[#8a5510] border-[#d19a4a] font-mono text-[11px] tracking-[0.16em]"
+              }
+            >
+              {status}
+            </Badge>
+            <div className="temp-reading">
+              <span>{temperature.toFixed(1)}</span>
+              <sup>deg C</sup>
+            </div>
+            <div className="status-bar">
+              <span style={{ width: `${Math.min(100, Math.max(0, ((temperature - 2) / 6) * 100))}%` }} />
+            </div>
+            <div className="status-limits">
+              <span>02.0</span>
+              <span>SAFE CORRIDOR</span>
+              <span>08.0</span>
+            </div>
+            <Button
+              onClick={() => setIsMonitoring((current) => !current)}
+              className={`mt-auto w-full rounded-none font-mono text-[9px] tracking-[0.05em] h-10 gap-2 ${
+                isMonitoring
+                  ? "bg-[#172019] hover:bg-[#1d5d59] text-[#f3f4ed] border-[#172019]"
+                  : "bg-[#267e79] hover:bg-[#1d5d59] text-white border-[#267e79]"
+              }`}
+            >
+              <span aria-hidden="true">{isMonitoring ? "||" : ">"}</span>
+              {isMonitoring ? "PAUSE SIMULATION" : "RESUME SIMULATION"}
+            </Button>
+            <div className="panel-foot">
+              <span aria-hidden="true">o</span> SAMPLE EVERY 02 SEC <span>/</span> NEXT LEDGER APPEND 09 SEC
+            </div>
+          </CardContent>
+        </Card>
 
         <div className="chart-panel">
           <div className="chart-head">
