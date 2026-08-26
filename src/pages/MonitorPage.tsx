@@ -112,7 +112,7 @@ export default function MonitorPage() {
             </div>
             <Button
               onClick={() => setIsMonitoring((current) => !current)}
-              className={`mt-auto w-full rounded-none font-mono text-[9px] tracking-[0.05em] h-10 gap-2 ${
+              className={`mt-auto w-full rounded-full font-sans text-[13px] font-medium tracking-[-0.01em] h-10 gap-2 shadow-sm ${
                 isMonitoring
                   ? "bg-[#172019] hover:bg-[#1d5d59] text-[#f3f4ed] border-[#172019] dark:bg-[#e8e9e3] dark:hover:bg-[#c8d5d0] dark:text-[#0e1210] dark:border-[#e8e9e3]"
                   : "bg-[#267e79] hover:bg-[#1d5d59] text-white border-[#267e79] dark:bg-[#3aa79f] dark:hover:bg-[#2e9e98] dark:text-[#0e1210] dark:border-[#3aa79f]"

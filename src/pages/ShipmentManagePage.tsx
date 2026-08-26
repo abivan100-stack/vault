@@ -57,8 +57,8 @@ export default function ShipmentManagePage() {
   return (
     <div className="space-y-6 pt-2">
       <div className="flex items-center gap-3">
-        <Button variant="ghost" size="sm" onClick={() => navigate("/shipment")} className="font-mono text-[8px] gap-1.5">
-          <ArrowLeft size={12} /> BACK TO LANDING
+        <Button variant="ghost" onClick={() => navigate("/shipment")} className="font-sans text-[13px] font-medium tracking-[-0.01em] gap-1.5 h-9 px-4 rounded-full">
+          <ArrowLeft size={14} /> Back to shipment
         </Button>
         <div className="eyebrow">SHIPMENT / MANAGE</div>
       </div>
@@ -81,22 +81,22 @@ export default function ShipmentManagePage() {
             </Badge>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            <Button size="sm" onClick={() => setEditOpen(true)} className="bg-[#267e79] hover:bg-[#1d5d59] text-white font-mono text-[8px] h-10 gap-1.5">
-              <Pencil size={12} /> EDIT
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+            <Button onClick={() => setEditOpen(true)} className="bg-[#267e79] hover:bg-[#1d5d59] text-white font-sans text-[13px] font-medium tracking-[-0.01em] h-10 px-5 gap-2 rounded-full shadow-sm">
+              <Pencil size={14} /> Edit
             </Button>
-            <Button size="sm" variant="outline" onClick={handleCopy} className="font-mono text-[8px] h-10 gap-1.5">
-              <Copy size={12} /> COPY
+            <Button variant="outline" onClick={handleCopy} className="font-sans text-[13px] font-medium tracking-[-0.01em] h-10 px-5 gap-2 rounded-full border-[1.5px] bg-white dark:bg-[#1c2220] shadow-sm">
+              <Copy size={14} /> Copy
             </Button>
-            <Button size="sm" variant="outline" onClick={handleHandoff} className="font-mono text-[8px] h-10 gap-1.5">
-              <Truck size={12} /> HANDOFF
+            <Button variant="outline" onClick={handleHandoff} className="font-sans text-[13px] font-medium tracking-[-0.01em] h-10 px-5 gap-2 rounded-full border-[1.5px] bg-white dark:bg-[#1c2220] shadow-sm">
+              <Truck size={14} /> Handoff
             </Button>
-            <Button size="sm" variant="ghost" onClick={resetFieldLog} className="font-mono text-[8px] h-10 gap-1">
-              <RotateCcw size={12} /> RESET
+            <Button variant="ghost" onClick={resetFieldLog} className="font-sans text-[13px] font-medium tracking-[-0.01em] h-10 px-5 gap-2 rounded-full">
+              <RotateCcw size={14} /> Reset
             </Button>
           </div>
-          <Button size="sm" variant="secondary" onClick={createNewShipment} className="w-full font-mono text-[8px] h-10 gap-1.5 bg-[#172019] dark:bg-[#0e1210] text-white hover:bg-black dark:hover:bg-black border dark:border-[#2a352f]">
-            <Plus size={12} /> NEW SHIPMENT
+          <Button variant="secondary" onClick={createNewShipment} className="w-full font-sans text-[13px] font-medium tracking-[-0.01em] h-10 gap-2 rounded-full bg-[#172019] dark:bg-[#e8e9e3] dark:text-[#0e1210] hover:bg-black dark:hover:bg-[#c8d5d0] shadow-sm border dark:border-[#2a352f]">
+            <Plus size={14} /> New shipment
           </Button>
 
           {toast && (
@@ -146,8 +146,8 @@ export default function ShipmentManagePage() {
             </div>
           </div>
           <DialogFooter className="gap-2">
-            <Button variant="outline" onClick={() => setEditOpen(false)} className="font-mono text-[9px]">CANCEL</Button>
-            <Button onClick={handleSave} className="bg-[#267e79] hover:bg-[#1d5d59] text-white font-mono text-[9px]">SAVE CHANGES</Button>
+            <Button variant="outline" onClick={() => setEditOpen(false)} className="font-sans text-[13px] font-medium rounded-full px-5">Cancel</Button>
+            <Button onClick={handleSave} className="bg-[#267e79] hover:bg-[#1d5d59] text-white font-sans text-[13px] font-medium rounded-full px-6">Save changes</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

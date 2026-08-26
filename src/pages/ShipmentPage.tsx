@@ -50,8 +50,8 @@ export default function ShipmentPage() {
             <Badge variant="outline" className={status === "SAFE" ? "bg-[#e6f0e9] dark:bg-[#1e2623] text-[#318b5d] dark:text-[#5ac18a] border-[#cbd2c6] dark:border-[#2a352f] text-[7px] h-5" : "bg-[#f9e8c9] dark:bg-[#2a1f0a] text-[#8a5510] dark:text-[#d19a4a] text-[7px] h-5"}>
               {status === "SAFE" ? <ShieldCheck size={10} /> : <ShieldAlert size={10} />} {status}
             </Badge>
-            <Button size="sm" onClick={() => navigate("/shipment/manage")} className="bg-[#267e79] hover:bg-[#1d5d59] text-white font-mono text-[8px] h-7 gap-1.5">
-              <Settings2 size={12} /> MANAGE
+            <Button onClick={() => navigate("/shipment/manage")} className="bg-[#267e79] hover:bg-[#1d5d59] text-white font-sans text-[13px] font-medium tracking-[-0.01em] h-10 px-6 gap-2 rounded-full shadow-sm">
+              <Settings2 size={14} /> Manage
             </Button>
           </div>
         </div>
@@ -116,14 +116,14 @@ export default function ShipmentPage() {
 
       <div className="border-t border-[#cbd2c6] dark:border-[#2a352f] pt-6 pb-2 flex items-center justify-between gap-3">
         <div className="font-mono text-[8px] text-[#667068] dark:text-[#7a8a84]">Need to edit? The shipment workspace is the dedicated place — not the display.</div>
-        <Button size="sm" variant="outline" onClick={() => navigate("/shipment/manage")} className="font-mono text-[8px] gap-1.5 shrink-0">
-          <Settings2 size={12} /> OPEN WORKSPACE
+        <Button variant="outline" onClick={() => navigate("/shipment/manage")} className="font-sans text-[13px] font-medium tracking-[-0.01em] h-10 px-6 gap-2 rounded-full border-[1.5px] bg-white dark:bg-[#1c2220] shadow-sm shrink-0">
+          <Settings2 size={14} /> Open workspace
         </Button>
       </div>
 
       <div className="pt-6 flex justify-center">
-        <Button variant="outline" className="font-mono text-[9px] font-bold tracking-[0.07em] h-9 px-6 gap-2 rounded-lg border-[1.5px] border-[#267e79] dark:border-[#3aa79f] text-[#1d5d59] dark:text-[#7ec8c1] bg-white dark:bg-[#1c2220] hover:bg-[#e6f0e9] dark:hover:bg-[#1e2623] shadow-sm" onClick={() => navigate("/monitor")}>
-          GO TO MONITOR <ArrowRight size={13} strokeWidth={2} />
+        <Button variant="outline" className="font-sans text-[13px] font-medium tracking-[-0.01em] h-10 px-6 gap-2 rounded-full border-[1.5px] border-[#267e79] dark:border-[#3aa79f] text-[#1d5d59] dark:text-[#7ec8c1] bg-white dark:bg-[#1c2220] hover:bg-[#e6f0e9] dark:hover:bg-[#1e2623] shadow-sm" onClick={() => navigate("/monitor")}>
+          Go to monitor <ArrowRight size={14} strokeWidth={2} />
         </Button>
       </div>
     </div>

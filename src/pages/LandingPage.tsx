@@ -30,11 +30,11 @@ export default function LandingPage() {
               Vault records every dose’s journey — temperature, time and trust — from loading bay to last-mile handoff. Simulation runs locally, data persists, ledger is verifiable.
             </p>
             <div className="mt-6 flex flex-wrap gap-3">
-              <Button className="bg-[#267e79] hover:bg-[#1d5d59] text-white font-mono text-[9px] font-bold tracking-[0.08em] h-10 px-6 gap-2 rounded-lg shadow-[0_4px_14px_rgba(38,126,121,0.22)] border border-[#267e79] dark:border-[#3aa79f] dark:bg-[#3aa79f] dark:hover:bg-[#2e9e98] dark:text-[#0e1210]" onClick={() => navigate("/monitor")}>
-                <span>OPEN MONITOR</span> <ArrowRight size={13} strokeWidth={2} />
+              <Button className="bg-[#267e79] hover:bg-[#1d5d59] text-white font-sans text-[13px] font-medium tracking-[-0.01em] h-10 px-6 gap-2 rounded-full shadow-[0_4px_14px_rgba(38,126,121,0.22)] border border-[#267e79] dark:border-[#3aa79f] dark:bg-[#3aa79f] dark:hover:bg-[#2e9e98] dark:text-[#0e1210]" onClick={() => navigate("/monitor")}>
+                <span>Open monitor</span> <ArrowRight size={14} strokeWidth={2} />
               </Button>
-              <Button variant="outline" className="font-mono text-[9px] font-semibold tracking-[0.07em] h-10 px-6 gap-2 rounded-lg border-[1.5px] border-[#267e79] dark:border-[#3aa79f] text-[#1d5d59] dark:text-[#7ec8c1] hover:bg-[#e6f0e9] dark:hover:bg-[#1e2623] bg-white dark:bg-transparent shadow-sm" onClick={() => navigate("/shipment")}>
-                <Package size={13} strokeWidth={2} /> VIEW SHIPMENT
+              <Button variant="outline" className="font-sans text-[13px] font-medium tracking-[-0.01em] h-10 px-6 gap-2 rounded-full border-[1.5px] border-[#267e79] dark:border-[#3aa79f] text-[#1d5d59] dark:text-[#7ec8c1] hover:bg-[#e6f0e9] dark:hover:bg-[#1e2623] bg-white dark:bg-transparent shadow-sm" onClick={() => navigate("/shipment")}>
+                <Package size={14} strokeWidth={2} /> View shipment
               </Button>
             </div>
             <div className="mt-6 flex flex-wrap items-center gap-3 font-mono text-[8px] text-[#667068] dark:text-[#7a8a84]">
@@ -122,11 +122,11 @@ export default function LandingPage() {
       <section className="border-t border-[#cbd2c6] dark:border-[#2a352f] py-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div className="font-mono text-[9px] text-[#5a6a62] dark:text-[#9aa6a1]">First impression should be calm, not flashy. No rotating rings — just clarity.</div>
         <div className="flex gap-2.5">
-          <Button variant="outline" className="font-mono text-[9px] font-semibold tracking-[0.06em] h-9 px-5 gap-1.5 rounded-lg border-[1.5px] border-[#cbd2c6] dark:border-[#2a352f] bg-white dark:bg-[#1c2220] hover:bg-[#f7f8f4] dark:hover:bg-[#1e2623] shadow-sm" onClick={() => navigate("/ledger")}>
-            VIEW LEDGER
+          <Button variant="outline" className="font-sans text-[13px] font-medium tracking-[-0.01em] h-10 px-6 gap-1.5 rounded-full border-[1.5px] border-[#cbd2c6] dark:border-[#2a352f] bg-white dark:bg-[#1c2220] hover:bg-[#f7f8f4] dark:hover:bg-[#1e2623] shadow-sm" onClick={() => navigate("/ledger")}>
+            View ledger
           </Button>
-          <Button className="bg-[#172019] dark:bg-[#e8e9e3] dark:text-[#0e1210] hover:bg-black dark:hover:bg-[#c8d5d0] font-mono text-[9px] font-bold tracking-[0.06em] h-9 px-5 gap-1.5 rounded-lg shadow-sm border border-transparent dark:border-[#2a352f]" onClick={() => navigate("/shipment/manage")}>
-            <Settings2 size={12} strokeWidth={2} /> MANAGE SHIPMENT
+          <Button className="bg-[#172019] dark:bg-[#e8e9e3] dark:text-[#0e1210] hover:bg-black dark:hover:bg-[#c8d5d0] font-sans text-[13px] font-medium tracking-[-0.01em] h-10 px-6 gap-1.5 rounded-full shadow-sm border border-transparent dark:border-[#2a352f]" onClick={() => navigate("/shipment/manage")}>
+            <Settings2 size={14} strokeWidth={2} /> Manage shipment
           </Button>
         </div>
       </section>
