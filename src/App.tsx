@@ -38,17 +38,19 @@ function App() {
     if (!isMonitoring) return undefined;
 
     const interval = window.setInterval(() => {
-      const next = temperature + (Math.random() - 0.5) * 0.24;
-      const nextTemperature = Math.min(8.5, Math.max(1.5, Number(next.toFixed(1))));
-      setTemperature(nextTemperature);
-      setReadings((current) => [
-        ...current.slice(-7),
-        { time: formatTime(new Date()), value: nextTemperature },
-      ]);
+      setTemperature((previous) => {
+        const next = previous + (Math.random() - 0.5) * 0.24;
+        const nextTemperature = Math.min(8.5, Math.max(1.5, Number(next.toFixed(1))));
+        setReadings((current) => [
+          ...current.slice(-7),
+          { time: formatTime(new Date()), value: nextTemperature },
+        ]);
+        return nextTemperature;
+      });
     }, 2000);
 
     return () => window.clearInterval(interval);
-  }, [isMonitoring, temperature]);
+  }, [isMonitoring]);
 
   const chartPath = useMemo(() => {
     const width = 720;
