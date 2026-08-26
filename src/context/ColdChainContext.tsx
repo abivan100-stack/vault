@@ -7,7 +7,7 @@ type Reading = {
   value: number;
 };
 
-type FieldLogMeta = {
+export type FieldLogMeta = {
   logId: string;
   box: string;
   product: string;
@@ -51,6 +51,25 @@ function toChartY(value: number, height: number): number {
   return Math.min(height, Math.max(0, raw));
 }
 
+function generateFieldLogDefaults(): FieldLogMeta {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const d = String(now.getDate()).padStart(2, "0");
+  return {
+    logId: `FIELD LOG / ${y}-${m}${d}-00124`,
+    box: "VCC-BOX-001",
+    product: "IPV Polio Vaccine",
+    batch: `VAC-${y}${m}${d}-A124`,
+    doses: "250 units",
+    range: "02.0\u201308.0 \u00B0C",
+    started: now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }),
+    route: "DELHI \u2192 JAIPUR",
+  };
+}
+
+const STORAGE_KEY = "vault:fieldLog";
+
 type ColdChainValue = {
   temperature: number;
   status: Status;
@@ -59,6 +78,9 @@ type ColdChainValue = {
   readings: Reading[];
   chartPath: string;
   fieldLogMeta: FieldLogMeta;
+  updateFieldLog: (patch: Partial<FieldLogMeta>) => void;
+  resetFieldLog: () => void;
+  createNewShipment: () => void;
   ledgerRows: LedgerRow[];
   toChartY: (value: number, height: number) => number;
 };
@@ -71,22 +93,54 @@ export function ColdChainProvider({ children }: { children: ReactNode }) {
   const [readings, setReadings] = useState<Reading[]>(seedReadings);
   const status: Status = temperature < 2 || temperature > 8 ? "EXCURSION" : "SAFE";
 
-  const fieldLogMeta = useMemo<FieldLogMeta>(() => {
+  const [fieldLogMeta, setFieldLogMeta] = useState<FieldLogMeta>(() => {
+    try {
+      const raw = typeof window !== "undefined" ? window.localStorage.getItem(STORAGE_KEY) : null;
+      if (raw) {
+        const parsed = JSON.parse(raw) as FieldLogMeta;
+        if (parsed.logId && parsed.box && parsed.product) return parsed;
+      }
+    } catch {
+      // ignore
+    }
+    return generateFieldLogDefaults();
+  });
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(fieldLogMeta));
+    } catch {
+      // ignore
+    }
+  }, [fieldLogMeta]);
+
+  const updateFieldLog = (patch: Partial<FieldLogMeta>) => {
+    setFieldLogMeta((prev) => ({ ...prev, ...patch }));
+  };
+
+  const resetFieldLog = () => {
+    setFieldLogMeta(generateFieldLogDefaults());
+  };
+
+  const createNewShipment = () => {
     const now = new Date();
     const y = now.getFullYear();
     const m = String(now.getMonth() + 1).padStart(2, "0");
     const d = String(now.getDate()).padStart(2, "0");
-    return {
-      logId: `FIELD LOG / ${y}-${m}${d}-00124`,
-      box: "VCC-BOX-001",
+    const rand = String(Math.floor(Math.random() * 900) + 100);
+    setFieldLogMeta({
+      logId: `FIELD LOG / ${y}-${m}${d}-${rand}`,
+      box: `VCC-BOX-${rand}`,
       product: "IPV Polio Vaccine",
-      batch: `VAC-${y}${m}${d}-A124`,
+      batch: `VAC-${y}${m}${d}-A${rand.slice(0, 2)}`,
       doses: "250 units",
       range: "02.0\u201308.0 \u00B0C",
       started: now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }),
       route: "DELHI \u2192 JAIPUR",
-    };
-  }, []);
+    });
+    setReadings(seedReadings);
+    setTemperature(4.8);
+  };
 
   useEffect(() => {
     if (!isMonitoring) return undefined;
@@ -127,6 +181,9 @@ export function ColdChainProvider({ children }: { children: ReactNode }) {
       readings,
       chartPath,
       fieldLogMeta,
+      updateFieldLog,
+      resetFieldLog,
+      createNewShipment,
       ledgerRows,
       toChartY,
     }),
