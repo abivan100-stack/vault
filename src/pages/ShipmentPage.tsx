@@ -122,8 +122,8 @@ export default function ShipmentPage() {
       </div>
 
       <div className="pt-6 flex justify-center">
-        <Button variant="ghost" className="font-mono text-[8px] gap-1.5 text-[#5a6a62] dark:text-[#9aa6a1]" onClick={() => navigate("/monitor")}>
-          Go to monitor <ArrowRight size={12} />
+        <Button variant="outline" className="font-mono text-[9px] font-bold tracking-[0.07em] h-9 px-6 gap-2 rounded-lg border-[1.5px] border-[#267e79] dark:border-[#3aa79f] text-[#1d5d59] dark:text-[#7ec8c1] bg-white dark:bg-[#1c2220] hover:bg-[#e6f0e9] dark:hover:bg-[#1e2623] shadow-sm" onClick={() => navigate("/monitor")}>
+          GO TO MONITOR <ArrowRight size={13} strokeWidth={2} />
         </Button>
       </div>
     </div>
