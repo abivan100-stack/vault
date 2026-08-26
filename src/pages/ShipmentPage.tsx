@@ -56,7 +56,7 @@ export default function ShipmentPage() {
         </div>
       </section>
 
-      <div className="shipment-grid grid gap-4 lg:grid-cols-3">
+      <div className="shipment-grid grid gap-4 lg:grid-cols-3 lg:items-start">
         {/* Primary shipment card */}
         <Card className="lg:col-span-2 overflow-hidden border-[#cbd2c6] dark:border-[#2a352f] bg-white dark:bg-[#171c19] shadow-[0_8px_24px_rgba(23,32,25,0.06)] dark:shadow-[0_8px_24px_rgba(0,0,0,0.24)]">
           <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
