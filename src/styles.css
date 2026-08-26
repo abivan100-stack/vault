@@ -306,6 +306,13 @@ button { cursor: pointer; }
 .dark .vault-app { background-color: #0e1210; background-image: linear-gradient(rgba(90,130,115,0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(90,130,115,0.06) 1px, transparent 1px); }
 .dark .topbar { background: rgba(16,20,18,0.88); border-color: #24302c; box-shadow: 0 4px 20px rgba(0,0,0,0.28); }
 .dark .brand strong { color: #e8e9e3; }
+.dark .topnav a { color: #7a8a84; }
+.dark .topnav a:hover { background: rgba(58,167,159,0.08); border-bottom-color: rgba(58,167,159,0.28); color: #c8d5d0; }
+.dark .topnav a.active { background: rgba(58,167,159,0.14); color: #7ec8c1; border-bottom-color: #3aa79f; box-shadow: inset 0 -1px 0 rgba(58,167,159,0.2); }
+.dark .meta-pill { background: #1e2623; border-color: #2a352f; box-shadow: 0 2px 10px rgba(0,0,0,0.32), inset 0 1px 0 rgba(255,255,255,0.06); }
+.dark .topbar-meta .mono { color: #c8d5d0; }
+.dark .icon-button { background: #1e2623; border-color: #2a352f; color: #7ec8c1; box-shadow: 0 2px 10px rgba(0,0,0,0.32), inset 0 1px 0 rgba(255,255,255,0.06); }
+.dark .icon-button:hover { background: #267e79; border-color: #3aa79f; color: #ffffff; box-shadow: 0 4px 12px rgba(58,167,159,0.28); }
 .dark .field-log { background: #171c19; border-color: #2a352f; box-shadow: 0 8px 24px rgba(0,0,0,0.28); }
 .dark .field-log .eyebrow { color: #e8e9e3; }
 .dark .log-rule { border-color: #2a352f; }
