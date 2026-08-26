@@ -1,15 +1,14 @@
 import { useEffect, useState } from "react";
 import anime from "animejs";
 import { useNavigate } from "react-router-dom";
-import { ShieldCheck, ShieldAlert, Thermometer, Signal, Pencil, Copy, RotateCcw, Plus, Truck, CheckCircle2, ArrowRight } from "lucide-react";
+import { ShieldCheck, ShieldAlert, Thermometer, Signal, Pencil, Copy, RotateCcw, Plus, Truck, CheckCircle2, ArrowRight, Settings2 } from "lucide-react";
 import { useColdChain } from "../context/ColdChainContext";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
 
 export default function ShipmentPage() {
   const { fieldLogMeta, status, updateFieldLog, resetFieldLog, createNewShipment } = useColdChain();
@@ -75,88 +74,61 @@ export default function ShipmentPage() {
   return (
     <div className="space-y-0">
       <section className="intro-grid" id="shipment">
+        {/* Clean field log — display only, no edit/copy bar */}
         <Card className="field-log gap-0 !p-0 overflow-hidden bg-white dark:bg-[#171c19] border-[#cbd2c6] dark:border-[#2a352f] rounded-[10px] shadow-[0_8px_24px_rgba(23,32,25,0.08)] dark:shadow-[0_8px_24px_rgba(0,0,0,0.32)]">
-          <CardContent className="p-0">
-            <div className="p-[22px_20px_14px]">
-              <div className="flex items-start justify-between gap-2">
-                <div className="eyebrow text-[#172019] font-bold tracking-[0.11em] text-[9.5px]">{fieldLogMeta.logId}</div>
-                <Badge variant="outline" className={status === "SAFE" ? "bg-[#e6f0e9] text-[#318b5d] border-[#cbd2c6] text-[7px] h-5" : "bg-[#f9e8c9] text-[#8a5510] border-[#d19a4a] text-[7px] h-5"}>
-                  {status === "SAFE" ? <ShieldCheck size={10} /> : <ShieldAlert size={10} />} {status}
+          <CardContent className="p-[22px_20px_20px]">
+            <div className="flex items-start justify-between gap-2">
+              <div className="eyebrow text-[#172019] font-bold tracking-[0.11em] text-[9.5px]">{fieldLogMeta.logId}</div>
+              <Badge variant="outline" className={status === "SAFE" ? "bg-[#e6f0e9] text-[#318b5d] border-[#cbd2c6] text-[7px] h-5" : "bg-[#f9e8c9] text-[#8a5510] border-[#d19a4a] text-[7px] h-5"}>
+                {status === "SAFE" ? <ShieldCheck size={10} /> : <ShieldAlert size={10} />} {status}
+              </Badge>
+            </div>
+            <div className="log-rule border-t-[1.5px] border-[#e0e6dd] dark:border-[#2a352f] mt-[14px] mb-[2px]" />
+            <dl className="m-0">
+              <div className="py-[12px] border-b border-[#e6ebe4] dark:border-[#2a352f] flex flex-col gap-1">
+                <dt className="font-mono text-[8px] font-bold text-[#267e79] tracking-[0.14em] uppercase">BOX</dt>
+                <dd className="font-mono text-[10.5px] font-semibold text-[#172019] flex items-center justify-between gap-2">
+                  {fieldLogMeta.box}
+                  <span className="text-[#9aa6a1] dark:text-[#7a8a84] text-[7px] font-mono">ID</span>
+                </dd>
+              </div>
+              <div className="py-[12px] border-b border-[#e6ebe4] dark:border-[#2a352f] flex flex-col gap-1">
+                <dt className="font-mono text-[8px] font-bold text-[#267e79] tracking-[0.14em] uppercase">PRODUCT</dt>
+                <dd className="font-mono text-[10.5px] font-semibold text-[#172019]">{fieldLogMeta.product}</dd>
+              </div>
+              <div className="py-[12px] border-b border-[#e6ebe4] dark:border-[#2a352f] flex flex-col gap-1">
+                <dt className="font-mono text-[8px] font-bold text-[#267e79] tracking-[0.14em] uppercase">BATCH</dt>
+                <dd className="font-mono text-[10.5px] font-semibold text-[#172019]">{fieldLogMeta.batch}</dd>
+              </div>
+              <div className="py-[12px] border-b border-[#e6ebe4] dark:border-[#2a352f] flex flex-col gap-1">
+                <dt className="font-mono text-[8px] font-bold text-[#267e79] tracking-[0.14em] uppercase">DOSES</dt>
+                <dd className="font-mono text-[10.5px] font-semibold text-[#172019]">{fieldLogMeta.doses}</dd>
+              </div>
+              <div className="py-[12px] flex flex-col gap-1">
+                <dt className="font-mono text-[8px] font-bold text-[#267e79] tracking-[0.14em] uppercase">RANGE</dt>
+                <dd className="font-mono text-[10.5px] font-semibold text-[#172019]">{fieldLogMeta.range}</dd>
+              </div>
+            </dl>
+            <div className="log-foot font-mono bg-[#f7f8f4] dark:bg-[#1c2220] border border-[#e6ebe4] dark:border-[#2a352f] rounded-md p-[10px_12px] text-[8px] leading-[1.7] mt-2 font-semibold tracking-[0.04em] text-[#172019] dark:text-[#c8d5d0]">
+              STARTED {fieldLogMeta.started}
+              <br />
+              ROUTE / {fieldLogMeta.route}
+              <div className="mt-2 flex gap-1.5">
+                <Badge variant="secondary" className="bg-[#e6f0e9] text-[#318b5d] border text-[7px] px-1.5 py-0">
+                  LIVE
                 </Badge>
-              </div>
-              <div className="log-rule border-t-[1.5px] border-[#e0e6dd] dark:border-[#2a352f] mt-[14px] mb-[2px]" />
-              <dl className="m-0">
-                <div className="py-[12px] border-b border-[#e6ebe4] dark:border-[#2a352f] flex flex-col gap-1">
-                  <dt className="font-mono text-[8px] font-bold text-[#267e79] tracking-[0.14em] uppercase">BOX</dt>
-                  <dd className="font-mono text-[10.5px] font-semibold text-[#172019] flex items-center justify-between gap-2">
-                    {fieldLogMeta.box}
-                    <button onClick={handleCopy} className="p-1 rounded hover:bg-[#f7f8f4] dark:hover:bg-[#24302c] transition-colors" aria-label="Copy box">
-                      <Copy size={12} className="text-[#667068]" />
-                    </button>
-                  </dd>
-                </div>
-                <div className="py-[12px] border-b border-[#e6ebe4] dark:border-[#2a352f] flex flex-col gap-1">
-                  <dt className="font-mono text-[8px] font-bold text-[#267e79] tracking-[0.14em] uppercase">PRODUCT</dt>
-                  <dd className="font-mono text-[10.5px] font-semibold text-[#172019]">{fieldLogMeta.product}</dd>
-                </div>
-                <div className="py-[12px] border-b border-[#e6ebe4] dark:border-[#2a352f] flex flex-col gap-1">
-                  <dt className="font-mono text-[8px] font-bold text-[#267e79] tracking-[0.14em] uppercase">BATCH</dt>
-                  <dd className="font-mono text-[10.5px] font-semibold text-[#172019]">{fieldLogMeta.batch}</dd>
-                </div>
-                <div className="py-[12px] border-b border-[#e6ebe4] dark:border-[#2a352f] flex flex-col gap-1">
-                  <dt className="font-mono text-[8px] font-bold text-[#267e79] tracking-[0.14em] uppercase">DOSES</dt>
-                  <dd className="font-mono text-[10.5px] font-semibold text-[#172019]">{fieldLogMeta.doses}</dd>
-                </div>
-                <div className="py-[12px] flex flex-col gap-1">
-                  <dt className="font-mono text-[8px] font-bold text-[#267e79] tracking-[0.14em] uppercase">RANGE</dt>
-                  <dd className="font-mono text-[10.5px] font-semibold text-[#172019]">{fieldLogMeta.range}</dd>
-                </div>
-              </dl>
-              <div className="log-foot font-mono bg-[#f7f8f4] dark:bg-[#1c2220] border border-[#e6ebe4] dark:border-[#2a352f] rounded-md p-[10px_12px] text-[8px] leading-[1.7] mt-2 font-semibold tracking-[0.04em] text-[#172019] dark:text-[#c8d5d0]">
-                STARTED {fieldLogMeta.started}
-                <br />
-                ROUTE / {fieldLogMeta.route}
-                <div className="mt-2 flex gap-1.5">
-                  <Badge variant="secondary" className="bg-[#e6f0e9] text-[#318b5d] border text-[7px] px-1.5 py-0">
-                    LIVE
+                <Badge variant="outline" className="font-mono text-[7px]">
+                  SHIPMENT
+                </Badge>
+                {handoffDone && (
+                  <Badge className="bg-[#1d5d59] text-white text-[7px] gap-1">
+                    <CheckCircle2 size={10} /> HANDED OFF
                   </Badge>
-                  <Badge variant="outline" className="font-mono text-[7px]">
-                    SHIPMENT
-                  </Badge>
-                  {handoffDone && (
-                    <Badge className="bg-[#1d5d59] text-white text-[7px] gap-1">
-                      <CheckCircle2 size={10} /> HANDED OFF
-                    </Badge>
-                  )}
-                </div>
+                )}
               </div>
             </div>
-
-            <Separator className="dark:bg-[#2a352f]" />
-
-            <div className="p-3 flex flex-wrap gap-2 bg-[#fcfdfb] dark:bg-[#1c2220] border-t border-transparent dark:border-[#2a352f]">
-              <Button size="sm" onClick={() => setEditOpen(true)} className="bg-[#267e79] hover:bg-[#1d5d59] text-white font-mono text-[8px] h-7 gap-1.5 flex-1 min-w-[92px]">
-                <Pencil size={12} /> EDIT
-              </Button>
-              <Button size="sm" variant="outline" onClick={handleCopy} className="font-mono text-[8px] h-7 gap-1.5">
-                <Copy size={12} /> COPY
-              </Button>
-              <Button size="sm" variant="outline" onClick={handleHandoff} className="font-mono text-[8px] h-7 gap-1.5">
-                <Truck size={12} /> HANDOFF
-              </Button>
-              <Button size="sm" variant="ghost" onClick={resetFieldLog} className="font-mono text-[8px] h-7 gap-1">
-                <RotateCcw size={12} /> RESET
-              </Button>
-            </div>
-
-            <div className="px-3 pb-3 bg-white dark:bg-[#171c19]">
-              <Button size="sm" variant="secondary" onClick={createNewShipment} className="w-full font-mono text-[8px] h-7 gap-1.5 bg-[#172019] text-white hover:bg-black">
-                <Plus size={12} /> NEW SHIPMENT
-              </Button>
-            </div>
-
             {toast && (
-              <div className="mx-3 mb-3 rounded-md bg-[#172019] text-white text-[9px] font-mono px-3 py-2 flex items-center gap-2">
+              <div className="mt-3 rounded-md bg-[#172019] dark:bg-[#0e1210] text-white text-[9px] font-mono px-3 py-2 flex items-center gap-2 border dark:border-[#2a352f]">
                 <CheckCircle2 size={12} className="text-[#7ec8a1]" /> {toast}
               </div>
             )}
@@ -174,7 +146,7 @@ export default function ShipmentPage() {
           <div className="intro-note">
             <span className="note-line" /> <span>One box. One unbroken chain.</span>
           </div>
-          <Button variant="outline" className="mt-6 font-mono text-[9px] gap-1.5 border-[#267e79] text-[#1d5d59]" onClick={() => navigate("/monitor")}>
+          <Button variant="outline" className="mt-6 font-mono text-[9px] gap-1.5 border-[#267e79] text-[#1d5d59] dark:border-[#3aa79f] dark:text-[#7ec8c1]" onClick={() => navigate("/monitor")}>
             GO TO MONITOR <ArrowRight size={12} />
           </Button>
         </div>
@@ -198,11 +170,62 @@ export default function ShipmentPage() {
         </div>
       </section>
 
+      {/* Dedicated shipment management — not on landing field-log */}
+      <section className="shipment-actions border-t border-[#cbd2c6] dark:border-[#2a352f] pt-8 pb-12">
+        <div className="flex items-end justify-between gap-4 mb-5">
+          <div>
+            <div className="eyebrow">03 / SHIPMENT CONTROLS</div>
+            <h2 className="mt-2 text-[22px] font-semibold tracking-[-0.04em]">Manage this shipment.</h2>
+            <p className="mt-1.5 font-mono text-[9px] text-[#5a6a62] dark:text-[#9aa6a1]">Editing here does not clutter the landing display — it’s a dedicated workspace.</p>
+          </div>
+          <Badge variant="outline" className="hidden sm:inline-flex font-mono text-[7px] gap-1.5">
+            <Settings2 size={10} /> WORKSPACE
+          </Badge>
+        </div>
+
+        <Card className="overflow-hidden border-[#cbd2c6] dark:border-[#2a352f] bg-white dark:bg-[#171c19] shadow-[0_8px_24px_rgba(23,32,25,0.06)] dark:shadow-[0_8px_24px_rgba(0,0,0,0.24)]">
+          <CardHeader className="pb-3">
+            <CardTitle className="font-mono text-[10px] tracking-[0.12em] flex items-center gap-2">
+              <Settings2 size={14} className="text-[#267e79]" /> SHIPMENT WORKSPACE
+            </CardTitle>
+            <CardDescription className="font-mono text-[9px]">Edit, duplicate, handoff or reset — changes persist to localStorage and update the landing display.</CardDescription>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              <Button size="sm" onClick={() => setEditOpen(true)} className="bg-[#267e79] hover:bg-[#1d5d59] text-white font-mono text-[8px] h-9 gap-1.5">
+                <Pencil size={12} /> EDIT
+              </Button>
+              <Button size="sm" variant="outline" onClick={handleCopy} className="font-mono text-[8px] h-9 gap-1.5">
+                <Copy size={12} /> COPY
+              </Button>
+              <Button size="sm" variant="outline" onClick={handleHandoff} className="font-mono text-[8px] h-9 gap-1.5">
+                <Truck size={12} /> HANDOFF
+              </Button>
+              <Button size="sm" variant="ghost" onClick={resetFieldLog} className="font-mono text-[8px] h-9 gap-1">
+                <RotateCcw size={12} /> RESET
+              </Button>
+            </div>
+            <Button size="sm" variant="secondary" onClick={createNewShipment} className="w-full mt-3 font-mono text-[8px] h-9 gap-1.5 bg-[#172019] dark:bg-[#0e1210] text-white hover:bg-black dark:hover:bg-black border dark:border-[#2a352f]">
+              <Plus size={12} /> NEW SHIPMENT
+            </Button>
+            <div className="mt-3 flex flex-wrap gap-1.5 font-mono text-[7px] text-[#667068] dark:text-[#7a8a84]">
+              <span className="inline-flex items-center gap-1">
+                <span className="h-1.5 w-1.5 rounded-full bg-[#318b5d]" /> {fieldLogMeta.box}
+              </span>
+              <span>•</span>
+              <span>{fieldLogMeta.batch}</span>
+              <span>•</span>
+              <span>{fieldLogMeta.route}</span>
+            </div>
+          </CardContent>
+        </Card>
+      </section>
+
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
-        <DialogContent className="sm:max-w-[420px] bg-white">
+        <DialogContent className="sm:max-w-[420px] bg-white dark:bg-[#171c19]">
           <DialogHeader>
             <DialogTitle className="font-mono text-[12px] tracking-[0.08em]">EDIT SHIPMENT</DialogTitle>
-            <DialogDescription className="font-mono text-[9px]">Update live shipment — persisted to localStorage, reflected instantly.</DialogDescription>
+            <DialogDescription className="font-mono text-[9px]">Update live shipment — persisted to localStorage, reflected on landing.</DialogDescription>
           </DialogHeader>
           <div className="grid gap-3 py-1">
             <div className="grid gap-1.5">
