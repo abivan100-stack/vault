@@ -2,6 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import App from "./App";
+import LandingPage from "./pages/LandingPage";
 import MonitorPage from "./pages/MonitorPage";
 import LedgerPage from "./pages/LedgerPage";
 import ShipmentPage from "./pages/ShipmentPage";
@@ -18,7 +19,7 @@ createRoot(rootElement).render(
     <BrowserRouter>
       <Routes>
         <Route path="/" element={<App />}>
-          <Route index element={<Navigate to="/shipment" replace />} />
+          <Route index element={<LandingPage />} />
           <Route path="monitor" element={<MonitorPage />} />
           <Route path="ledger" element={<LedgerPage />} />
           <Route path="shipment" element={<ShipmentPage />} />
