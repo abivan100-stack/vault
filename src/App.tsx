@@ -1,7 +1,39 @@
-import { NavLink, Outlet, Link } from "react-router-dom";
+import { useEffect } from "react";
+import anime from "animejs";
+import { NavLink, Outlet, Link, useLocation } from "react-router-dom";
 import { ColdChainProvider } from "./context/ColdChainContext";
 
 function Layout() {
+  const location = useLocation();
+
+  useEffect(() => {
+    anime({
+      targets: ".topbar",
+      translateY: [-12, 0],
+      opacity: [0, 1],
+      duration: 520,
+      easing: "easeOutExpo",
+    });
+    anime({
+      targets: ".brand, .topnav a, .topbar-meta",
+      translateY: [-8, 0],
+      opacity: [0, 1],
+      delay: anime.stagger(45),
+      duration: 560,
+      easing: "easeOutExpo",
+    });
+  }, []);
+
+  useEffect(() => {
+    anime({
+      targets: ".page-wrap > div, .page-wrap > section",
+      translateY: [10, 0],
+      opacity: [0, 1],
+      duration: 460,
+      easing: "easeOutExpo",
+    });
+  }, [location.pathname]);
+
   return (
     <div className="vault-app">
       <header className="topbar">

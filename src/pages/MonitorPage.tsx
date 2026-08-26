@@ -1,3 +1,5 @@
+import { useEffect } from "react";
+import anime from "animejs";
 import { useColdChain } from "../context/ColdChainContext";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -5,6 +7,61 @@ import { Card, CardHeader, CardContent } from "@/components/ui/card";
 
 export default function MonitorPage() {
   const { temperature, status, isMonitoring, setIsMonitoring, readings, chartPath, toChartY } = useColdChain();
+
+  useEffect(() => {
+    anime
+      .timeline({ easing: "easeOutExpo" })
+      .add({
+        targets: ".status-panel",
+        translateX: [-18, 0],
+        opacity: [0, 1],
+        duration: 560,
+      })
+      .add(
+        {
+          targets: ".chart-panel",
+          translateX: [18, 0],
+          opacity: [0, 1],
+          duration: 560,
+        },
+        "-=420",
+      )
+      .add(
+        {
+          targets: ".chart-path",
+          strokeDashoffset: [anime.setDashoffset, 0],
+          duration: 1100,
+          easing: "easeInOutSine",
+        },
+        "-=380",
+      );
+
+    anime({
+      targets: ".chart-point",
+      scale: [0, 1],
+      opacity: [0, 1],
+      delay: anime.stagger(45),
+      duration: 420,
+      easing: "easeOutBack",
+    });
+
+    return () => anime.remove(".status-panel, .chart-panel, .chart-path, .chart-point");
+  }, []);
+
+  useEffect(() => {
+    anime({
+      targets: ".temp-reading span",
+      scale: [0.97, 1],
+      duration: 320,
+      easing: "easeOutQuad",
+    });
+    anime({
+      targets: ".status-bar span",
+      scaleX: [0.92, 1],
+      duration: 380,
+      easing: "easeOutExpo",
+    });
+  }, [temperature]);
 
   return (
     <section className="monitor-section" id="monitor">

@@ -1,9 +1,35 @@
+import { useEffect } from "react";
+import anime from "animejs";
 import { useColdChain } from "../context/ColdChainContext";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 
 export default function LedgerPage() {
   const { ledgerRows } = useColdChain();
+
+  useEffect(() => {
+    anime
+      .timeline({ easing: "easeOutExpo" })
+      .add({
+        targets: ".ledger-heading h2, .ledger-heading .eyebrow",
+        translateY: [12, 0],
+        opacity: [0, 1],
+        delay: anime.stagger(70),
+        duration: 560,
+      })
+      .add(
+        {
+          targets: "[data-slot='table-row']",
+          translateY: [10, 0],
+          opacity: [0, 1],
+          delay: anime.stagger(80),
+          duration: 520,
+        },
+        "-=320",
+      );
+
+    return () => anime.remove(".ledger-heading h2, .ledger-heading .eyebrow, [data-slot='table-row']");
+  }, []);
 
   return (
     <section className="ledger-section" id="ledger">

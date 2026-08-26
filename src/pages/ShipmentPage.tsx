@@ -1,9 +1,71 @@
+import { useEffect } from "react";
+import anime from "animejs";
 import { useColdChain } from "../context/ColdChainContext";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
 export default function ShipmentPage() {
   const { fieldLogMeta, status } = useColdChain();
+
+  useEffect(() => {
+    const tl = anime.timeline({ easing: "easeOutExpo", duration: 700 });
+
+    tl.add({
+      targets: ".field-log",
+      translateX: [-24, 0],
+      opacity: [0, 1],
+      duration: 600,
+    })
+      .add(
+        {
+          targets: ".intro-copy h1, .intro-copy .intro-lede, .intro-copy .intro-note",
+          translateY: [16, 0],
+          opacity: [0, 1],
+          delay: anime.stagger(90),
+          duration: 600,
+        },
+        "-=400",
+      )
+      .add(
+        {
+          targets: ".orbit-wrap",
+          scale: [0.92, 1],
+          opacity: [0, 1],
+          duration: 700,
+        },
+        "-=500",
+      );
+
+    anime({
+      targets: ".orbit-ring.ring-two",
+      rotate: "1turn",
+      duration: 42000,
+      loop: true,
+      easing: "linear",
+    });
+
+    anime({
+      targets: ".orbit-ring.ring-one",
+      scale: [1, 1.02, 1],
+      duration: 3800,
+      loop: true,
+      direction: "alternate",
+      easing: "easeInOutSine",
+    });
+
+    return () => {
+      anime.remove(".field-log, .intro-copy h1, .intro-copy .intro-lede, .intro-copy .intro-note, .orbit-wrap, .orbit-ring");
+    };
+  }, []);
+
+  useEffect(() => {
+    anime({
+      targets: ".shield-glyph",
+      scale: [0.85, 1],
+      duration: 420,
+      easing: "easeOutBack",
+    });
+  }, [status]);
 
   return (
     <section className="intro-grid" id="shipment">
