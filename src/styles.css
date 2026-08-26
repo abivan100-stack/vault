@@ -170,7 +170,7 @@ button { cursor: pointer; }
   .topnav { gap: 16px; }
   .topnav a { font-size: 8px; }
   .topbar-meta { min-width: auto; }
-  .topbar-meta .mono { display: none; }
+  .topbar-meta .mono { font-size: 8px; }
   .intro-grid { grid-template-columns: 175px minmax(0, 1fr); gap: 25px; }
   .orbit-wrap { grid-column: 2; grid-row: 1; width: min(26vw, 230px); margin-left: auto; }
   .intro-copy { grid-column: 2; grid-row: 1; padding-top: 200px; }
