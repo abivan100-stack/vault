@@ -280,6 +280,13 @@ button { cursor: pointer; }
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+  --paper: #0e1210;
+  --ink: #e8e9e3;
+  --vault-muted: #9aa6a1;
+  --line: #25302b;
+  --teal: #3aa79f;
+  --teal-dark: #7ec8c1;
+  --safe: #5ac18a;
 }
 
 @layer base {
@@ -293,3 +300,24 @@ button { cursor: pointer; }
     @apply font-sans;
   }
 }
+
+/* Vault dark overrides — seamless */
+.dark body { background: #0e1210; }
+.dark .vault-app { background-color: #0e1210; background-image: linear-gradient(rgba(90,130,115,0.06) 1px, transparent 1px), linear-gradient(90deg, rgba(90,130,115,0.06) 1px, transparent 1px); }
+.dark .topbar { background: rgba(16,20,18,0.88); border-color: #24302c; box-shadow: 0 4px 20px rgba(0,0,0,0.28); }
+.dark .brand strong { color: #e8e9e3; }
+.dark .field-log { background: #171c19; border-color: #2a352f; box-shadow: 0 8px 24px rgba(0,0,0,0.28); }
+.dark .field-log .eyebrow { color: #e8e9e3; }
+.dark .log-rule { border-color: #2a352f; }
+.dark .field-log dl > div { border-color: #24302c; }
+.dark .log-foot { background: #1c2220; border-color: #2a352f; color: #c8d5d0; }
+.dark .intro-copy h1 { color: #e8e9e3; }
+.dark .intro-lede { color: #a8b8b0; }
+.dark .orbit-core { background: #1a1f1d; border-color: #2a352f; color: #7ec8c1; }
+.dark .orbit-label { background: #1a1f1d; border-color: #2a352f; color: #9aa6a1; }
+.dark .monitor-grid { border-color: #2a352f; background: rgba(23,28,25,0.6); }
+.dark .status-panel { border-color: #2a352f; }
+.dark .chart-panel { background: transparent; }
+.dark .ledger-table { border-color: #2a352f; }
+.dark .footer { border-color: #24302c; color: #7a8a84; }
+.dark .loading-screen { background: #0e1210; }
