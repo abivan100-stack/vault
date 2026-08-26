@@ -325,6 +325,9 @@ button { cursor: pointer; }
 .dark .monitor-grid { border-color: #2a352f; background: #171c19; box-shadow: 0 8px 24px rgba(0,0,0,0.28); }
 .dark .status-panel { border-color: #2a352f; background: #171c19; }
 .dark .chart-panel { background: #1c2220; }
+.dark .monitor-section, .dark .ledger-section { border-color: #2a352f; }
+.dark .section-heading h2 { color: #e8e9e3; }
+.dark .eyebrow { color: #9aa6a1; }
 .dark .section-heading h2 { color: #e8e9e3; }
 .dark .section-heading-meta { color: #7a8a84; }
 .dark .status-word { color: #5ac18a; }

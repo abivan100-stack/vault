@@ -66,38 +66,38 @@ export default function LedgerPage() {
           <div className="eyebrow">02 / IMMUTABLE TRAIL</div>
           <h2>Every reading leaves a mark.</h2>
         </div>
-        <button type="button" onClick={() => setFullOpen(true)} className="text-link inline-flex items-center gap-1.5 font-mono text-[9px] tracking-[0.08em] text-[#1d5d59] border-b border-[#267e79] pb-[5px] hover:text-[#267e79] transition-colors">
+        <button type="button" onClick={() => setFullOpen(true)} className="text-link inline-flex items-center gap-1.5 font-mono text-[9px] tracking-[0.08em] text-[#1d5d59] dark:text-[#7ec8c1] border-b border-[#267e79] dark:border-[#3aa79f] pb-[5px] hover:text-[#267e79] dark:hover:text-[#3aa79f] transition-colors">
           OPEN FULL LEDGER <ArrowRight size={12} aria-hidden="true" />
         </button>
       </div>
 
-      <div className="rounded-lg border border-[#9ea99e] bg-white overflow-hidden">
+      <div className="rounded-lg border border-[#9ea99e] dark:border-[#2a352f] bg-white dark:bg-[#171c19] overflow-hidden">
         <Table>
-          <TableHeader className="bg-[#f7f8f4]">
-            <TableRow className="border-b border-[#cbd2c6] hover:bg-transparent">
-              <TableHead className="font-mono text-[8px] tracking-[0.12em] text-muted-foreground">SEQ</TableHead>
-              <TableHead className="font-mono text-[8px] tracking-[0.12em] text-muted-foreground">ENTRY TYPE</TableHead>
-              <TableHead className="font-mono text-[8px] tracking-[0.12em] text-muted-foreground">UTC TIMESTAMP</TableHead>
-              <TableHead className="font-mono text-[8px] tracking-[0.12em] text-muted-foreground">STATUS</TableHead>
-              <TableHead className="font-mono text-[8px] tracking-[0.12em] text-muted-foreground">HASH</TableHead>
+          <TableHeader className="bg-[#f7f8f4] dark:bg-[#1c2220]">
+            <TableRow className="border-b border-[#cbd2c6] dark:border-[#2a352f] hover:bg-transparent">
+              <TableHead className="font-mono text-[8px] tracking-[0.12em] text-muted-foreground dark:text-[#9aa6a1]">SEQ</TableHead>
+              <TableHead className="font-mono text-[8px] tracking-[0.12em] text-muted-foreground dark:text-[#9aa6a1]">ENTRY TYPE</TableHead>
+              <TableHead className="font-mono text-[8px] tracking-[0.12em] text-muted-foreground dark:text-[#9aa6a1]">UTC TIMESTAMP</TableHead>
+              <TableHead className="font-mono text-[8px] tracking-[0.12em] text-muted-foreground dark:text-[#9aa6a1]">STATUS</TableHead>
+              <TableHead className="font-mono text-[8px] tracking-[0.12em] text-muted-foreground dark:text-[#9aa6a1]">HASH</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {ledgerRows.map((row, index) => (
-              <TableRow key={row.sequence} className="border-b border-[#cbd2c6] hover:bg-[#f7f8f4]/50">
-                <TableCell className="font-mono text-[9px] text-[#267e79] font-semibold">{row.sequence}</TableCell>
-                <TableCell className="font-mono text-[10px]">{row.event}</TableCell>
-                <TableCell className="font-mono text-[9px] text-muted-foreground">2026-08-26 / {row.time}</TableCell>
+              <TableRow key={row.sequence} className="border-b border-[#cbd2c6] dark:border-[#2a352f] hover:bg-[#f7f8f4]/50 dark:hover:bg-[#1c2220]/60">
+                <TableCell className="font-mono text-[9px] text-[#267e79] dark:text-[#3aa79f] font-semibold">{row.sequence}</TableCell>
+                <TableCell className="font-mono text-[10px] text-[#172019] dark:text-[#e8e9e3]">{row.event}</TableCell>
+                <TableCell className="font-mono text-[9px] text-muted-foreground dark:text-[#9aa6a1]">2026-08-26 / {row.time}</TableCell>
                 <TableCell>
-                  <Badge variant="secondary" className="bg-[#e6f0e9] text-[#318b5d] border-[#cbd2c6] font-mono text-[9px] gap-1">
-                    <BadgeCheck size={12} className="text-[#318b5d]" aria-hidden="true" />
+                  <Badge variant="secondary" className="bg-[#e6f0e9] dark:bg-[#1e2623] text-[#318b5d] dark:text-[#5ac18a] border-[#cbd2c6] dark:border-[#2a352f] font-mono text-[9px] gap-1">
+                    <BadgeCheck size={12} className="text-[#318b5d] dark:text-[#5ac18a]" aria-hidden="true" />
                     {row.status}
                   </Badge>
                 </TableCell>
-                <TableCell className="font-mono text-[9px] text-muted-foreground flex items-center gap-1.5">
+                <TableCell className="font-mono text-[9px] text-muted-foreground dark:text-[#9aa6a1] flex items-center gap-1.5">
                   {index === 0 ? "8f2a...c91d" : index === 1 ? "2b11...0a48" : "b728...f0e2"}
-                  <button onClick={() => handleCopy(index === 0 ? "8f2a9c91d4e6b0c91d" : index === 1 ? "2b1180a484f3c0a48" : "b728f0e2a91d4f0e2")} className="p-1 rounded hover:bg-[#f7f8f4]" aria-label="Copy hash">
-                    {copied === (index === 0 ? "8f2a9c91d4e6b0c91d" : index === 1 ? "2b1180a484f3c0a48" : "b728f0e2a91d4f0e2") ? <CheckCircle2 size={10} className="text-[#318b5d]" /> : <Copy size={10} className="text-[#667068]" />}
+                  <button onClick={() => handleCopy(index === 0 ? "8f2a9c91d4e6b0c91d" : index === 1 ? "2b1180a484f3c0a48" : "b728f0e2a91d4f0e2")} className="p-1 rounded hover:bg-[#f7f8f4] dark:hover:bg-[#1c2220]" aria-label="Copy hash">
+                    {copied === (index === 0 ? "8f2a9c91d4e6b0c91d" : index === 1 ? "2b1180a484f3c0a48" : "b728f0e2a91d4f0e2") ? <CheckCircle2 size={10} className="text-[#318b5d] dark:text-[#5ac18a]" /> : <Copy size={10} className="text-[#667068] dark:text-[#7a8a84]" />}
                   </button>
                 </TableCell>
               </TableRow>
@@ -107,40 +107,40 @@ export default function LedgerPage() {
       </div>
 
       <Dialog open={fullOpen} onOpenChange={setFullOpen}>
-        <DialogContent className="max-w-[720px] max-h-[82vh] overflow-hidden bg-white p-0 gap-0">
-          <DialogHeader className="p-6 pb-3 border-b border-[#e6ebe4]">
-            <DialogTitle className="font-mono text-[11px] tracking-[0.12em] flex items-center gap-2">
-              <FileText size={14} className="text-[#267e79]" /> FULL LEDGER — IMMUTABLE TRAIL
+        <DialogContent className="max-w-[720px] max-h-[82vh] overflow-hidden bg-white dark:bg-[#171c19] p-0 gap-0 border dark:border-[#2a352f]">
+          <DialogHeader className="p-6 pb-3 border-b border-[#e6ebe4] dark:border-[#2a352f]">
+            <DialogTitle className="font-mono text-[11px] tracking-[0.12em] flex items-center gap-2 dark:text-[#e8e9e3]">
+              <FileText size={14} className="text-[#267e79] dark:text-[#3aa79f]" /> FULL LEDGER — IMMUTABLE TRAIL
             </DialogTitle>
-            <DialogDescription className="font-mono text-[9px] text-[#5a6a62]">All 10 entries, verified hashes. Click hash to copy full value. Export for audit.</DialogDescription>
+            <DialogDescription className="font-mono text-[9px] text-[#5a6a62] dark:text-[#9aa6a1]">All 10 entries, verified hashes. Click hash to copy full value. Export for audit.</DialogDescription>
           </DialogHeader>
 
           <div className="overflow-auto max-h-[52vh]">
             <Table>
-              <TableHeader className="sticky top-0 bg-[#f7f8f4] z-10">
-                <TableRow className="hover:bg-transparent">
-                  <TableHead className="font-mono text-[8px]">SEQ</TableHead>
-                  <TableHead className="font-mono text-[8px]">ENTRY TYPE</TableHead>
-                  <TableHead className="font-mono text-[8px]">TIMESTAMP</TableHead>
-                  <TableHead className="font-mono text-[8px]">STATUS</TableHead>
-                  <TableHead className="font-mono text-[8px]">HASH</TableHead>
+              <TableHeader className="sticky top-0 bg-[#f7f8f4] dark:bg-[#1c2220] z-10">
+                <TableRow className="hover:bg-transparent border-b dark:border-[#2a352f]">
+                  <TableHead className="font-mono text-[8px] dark:text-[#9aa6a1]">SEQ</TableHead>
+                  <TableHead className="font-mono text-[8px] dark:text-[#9aa6a1]">ENTRY TYPE</TableHead>
+                  <TableHead className="font-mono text-[8px] dark:text-[#9aa6a1]">TIMESTAMP</TableHead>
+                  <TableHead className="font-mono text-[8px] dark:text-[#9aa6a1]">STATUS</TableHead>
+                  <TableHead className="font-mono text-[8px] dark:text-[#9aa6a1]">HASH</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {fullLedgerSeed.map((row) => (
-                  <TableRow key={row.sequence} className="hover:bg-[#f7f8f4]/60">
-                    <TableCell className="font-mono text-[9px] font-bold text-[#267e79]">{row.sequence}</TableCell>
-                    <TableCell className="font-mono text-[9px]">{row.event}</TableCell>
-                    <TableCell className="font-mono text-[9px] text-muted-foreground">2026-08-26 / {row.time}</TableCell>
+                  <TableRow key={row.sequence} className="hover:bg-[#f7f8f4]/60 dark:hover:bg-[#1c2220]/60 border-b dark:border-[#2a352f]">
+                    <TableCell className="font-mono text-[9px] font-bold text-[#267e79] dark:text-[#3aa79f]">{row.sequence}</TableCell>
+                    <TableCell className="font-mono text-[9px] text-[#172019] dark:text-[#e8e9e3]">{row.event}</TableCell>
+                    <TableCell className="font-mono text-[9px] text-muted-foreground dark:text-[#9aa6a1]">2026-08-26 / {row.time}</TableCell>
                     <TableCell>
-                      <Badge variant="secondary" className="bg-[#e6f0e9] text-[#318b5d] text-[8px] h-5 gap-1">
+                      <Badge variant="secondary" className="bg-[#e6f0e9] dark:bg-[#1e2623] text-[#318b5d] dark:text-[#5ac18a] border dark:border-[#2a352f] text-[8px] h-5 gap-1">
                         <BadgeCheck size={10} /> {row.status}
                       </Badge>
                     </TableCell>
                     <TableCell className="font-mono text-[8px]">
-                      <button onClick={() => handleCopy(row.fullHash)} className="inline-flex items-center gap-1.5 rounded border border-[#e6ebe4] bg-[#fcfdfb] px-2 py-1 hover:bg-white transition-colors">
+                      <button onClick={() => handleCopy(row.fullHash)} className="inline-flex items-center gap-1.5 rounded border border-[#e6ebe4] dark:border-[#2a352f] bg-[#fcfdfb] dark:bg-[#1c2220] px-2 py-1 hover:bg-white dark:hover:bg-[#24302c] transition-colors dark:text-[#e8e9e3]">
                         <span className="truncate max-w-[110px]">{row.hash}</span>
-                        {copied === row.fullHash ? <CheckCircle2 size={10} className="text-[#318b5d] shrink-0" /> : <Copy size={10} className="text-[#667068] shrink-0" />}
+                        {copied === row.fullHash ? <CheckCircle2 size={10} className="text-[#318b5d] dark:text-[#5ac18a] shrink-0" /> : <Copy size={10} className="text-[#667068] dark:text-[#7a8a84] shrink-0" />}
                       </button>
                     </TableCell>
                   </TableRow>
@@ -149,8 +149,8 @@ export default function LedgerPage() {
             </Table>
           </div>
 
-          <div className="p-4 border-t border-[#e6ebe4] bg-[#fcfdfb] flex items-center justify-between gap-3">
-            <div className="font-mono text-[8px] text-[#5a6a62]">{fullLedgerSeed.length} entries • verified • chain intact</div>
+          <div className="p-4 border-t border-[#e6ebe4] dark:border-[#2a352f] bg-[#fcfdfb] dark:bg-[#1c2220] flex items-center justify-between gap-3">
+            <div className="font-mono text-[8px] text-[#5a6a62] dark:text-[#9aa6a1]">{fullLedgerSeed.length} entries • verified • chain intact</div>
             <div className="flex gap-2">
               <Button variant="outline" size="sm" onClick={() => setFullOpen(false)} className="font-mono text-[9px] h-7">
                 CLOSE
