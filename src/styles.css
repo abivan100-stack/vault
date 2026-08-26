@@ -25,10 +25,11 @@ button { cursor: pointer; }
 .vault-app { min-height: 100vh; background-image: linear-gradient(rgba(52, 91, 74, 0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(52, 91, 74, 0.08) 1px, transparent 1px); background-size: 32px 32px; }
 .mono { font-family: var(--mono); font-size: 10px; letter-spacing: .08em; }
 .topbar { height: 72px; display: flex; align-items: center; justify-content: space-between; padding: 0 clamp(20px, 5vw, 72px); border-bottom: 1.5px solid #dfe6df; background: rgba(255,255,255,0.88); backdrop-filter: blur(12px) saturate(1.2); -webkit-backdrop-filter: blur(12px) saturate(1.2); position: sticky; top: 0; z-index: 10; box-shadow: 0 4px 20px rgba(23,32,25,0.06), 0 1px 3px rgba(23,32,25,0.04); }
-.brand { display: flex; gap: 12px; align-items: center; min-width: 205px; }
-.brand-mark { width: 34px; height: 34px; border-radius: 8px; background: linear-gradient(135deg, var(--teal) 0%, var(--teal-dark) 100%); color: #ffffff; display: grid; place-items: center; font-weight: 800; font-size: 14px; letter-spacing: 0.02em; box-shadow: 0 2px 8px rgba(38,126,121,0.35), inset 0 1px 0 rgba(255,255,255,0.2); border: none; }
-.brand strong { display: block; font-size: 15.5px; letter-spacing: .14em; line-height: 1; font-weight: 800; color: var(--ink); }
-.brand small { display: block; font-family: var(--mono); color: var(--teal-dark); letter-spacing: .1em; font-size: 8px; margin-top: 5px; font-weight: 700; opacity: 0.85; }
+.brand { display: flex; gap: 13px; align-items: center; min-width: 205px; }
+.brand-mark { width: 36px; height: 36px; border-radius: 9px; background: linear-gradient(145deg, #2e9e98 0%, var(--teal) 42%, #1b5a56 100%); color: #ffffff; display: grid; place-items: center; font-weight: 800; font-size: 15px; letter-spacing: -0.02em; box-shadow: 0 4px 12px rgba(38,126,121,0.32), 0 1px 2px rgba(23,32,25,0.07), inset 0 1px 1.5px rgba(255,255,255,0.35), inset 0 -1px 1px rgba(0,0,0,0.12); border: 1px solid rgba(255,255,255,0.18); position: relative; }
+.brand-mark::after { content: ''; position: absolute; inset: 1px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.12); pointer-events: none; }
+.brand strong { display: block; font-size: 16px; letter-spacing: .13em; line-height: 1; font-weight: 800; color: var(--ink); }
+.brand small { display: block; font-family: var(--mono); color: #3a4a43; letter-spacing: .11em; font-size: 7.5px; margin-top: 4px; font-weight: 700; opacity: 1; }
 .topnav { display: flex; align-self: stretch; align-items: center; gap: clamp(14px, 2.5vw, 36px); }
 .topnav a { align-self: stretch; display: grid; place-items: center; font-family: var(--mono); font-size: 9.5px; letter-spacing: .12em; font-weight: 600; color: var(--muted); border-bottom: 2.5px solid transparent; padding: 0 6px; transition: color .2s ease, border-color .2s ease, background .2s ease; position: relative; top: 0.75px; }
 .topnav a:hover { color: var(--ink); border-bottom-color: rgba(38,126,121,0.35); background: rgba(38,126,121,0.04); }
