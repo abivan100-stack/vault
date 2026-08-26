@@ -28,6 +28,11 @@ function formatTime(date: Date): string {
   return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
 }
 
+function toChartY(value: number, height: number): number {
+  const raw = height - ((value - 2) / 6) * height;
+  return Math.min(height, Math.max(0, raw));
+}
+
 function App() {
   const [isMonitoring, setIsMonitoring] = useState(true);
   const [temperature, setTemperature] = useState(4.8);
@@ -58,7 +63,7 @@ function App() {
     return readings
       .map((reading, index) => {
         const x = (index / Math.max(readings.length - 1, 1)) * width;
-        const y = height - ((reading.value - 2) / 6) * height;
+        const y = toChartY(reading.value, height);
         return `${index === 0 ? "M" : "L"}${x.toFixed(1)} ${y.toFixed(1)}`;
       })
       .join(" ");
@@ -158,7 +163,7 @@ function App() {
                   <path d={chartPath} className="chart-path" />
                   {readings.map((reading, index) => {
                     const x = (index / Math.max(readings.length - 1, 1)) * 720;
-                    const y = 190 - ((reading.value - 2) / 6) * 190;
+                    const y = toChartY(reading.value, 190);
                     return <circle key={`${reading.time}-${index}`} cx={x} cy={y} r={index === readings.length - 1 ? 5 : 2.5} className={index === readings.length - 1 ? "chart-point active" : "chart-point"} />;
                   })}
                 </svg>
