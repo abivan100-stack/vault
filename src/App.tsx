@@ -102,8 +102,10 @@ function App() {
           <a href="#shipment">SHIPMENT</a>
         </nav>
         <div className="topbar-meta">
-          <span className="live-dot" />
-          <span className="mono">SIMULATED / LOCAL</span>
+          <span className="meta-pill">
+            <span className="live-dot" />
+            <span className="mono">SIMULATED / LOCAL</span>
+          </span>
           <button className="icon-button" aria-label="Open help">?</button>
         </div>
       </header>
