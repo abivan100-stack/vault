@@ -322,9 +322,39 @@ button { cursor: pointer; }
 .dark .intro-lede { color: #a8b8b0; }
 .dark .orbit-core { background: #1a1f1d; border-color: #2a352f; color: #7ec8c1; }
 .dark .orbit-label { background: #1a1f1d; border-color: #2a352f; color: #9aa6a1; }
-.dark .monitor-grid { border-color: #2a352f; background: rgba(23,28,25,0.6); }
-.dark .status-panel { border-color: #2a352f; }
-.dark .chart-panel { background: transparent; }
+.dark .monitor-grid { border-color: #2a352f; background: #171c19; box-shadow: 0 8px 24px rgba(0,0,0,0.28); }
+.dark .status-panel { border-color: #2a352f; background: #171c19; }
+.dark .chart-panel { background: #1c2220; }
+.dark .section-heading h2 { color: #e8e9e3; }
+.dark .section-heading-meta { color: #7a8a84; }
+.dark .status-word { color: #5ac18a; }
+.dark .status-word.excursion { color: #d19a4a; }
+.dark .temp-reading { color: #e8e9e3; }
+.dark .temp-reading sup { color: #9aa6a1; }
+.dark .status-bar { background: #1e2623; }
+.dark .status-bar span { background: #5ac18a; }
+.dark .status-bar:before, .dark .status-bar:after { background: #3aa79f; }
+.dark .status-limits { color: #7a8a84; }
+.dark .status-limits span:nth-child(2) { color: #7ec8c1; }
+.dark .monitor-button { background: #e8e9e3; color: #0e1210; border-color: #e8e9e3; }
+.dark .monitor-button:hover { background: #3aa79f; border-color: #3aa79f; color: #0e1210; }
+.dark .monitor-button.start { background: #3aa79f; border-color: #3aa79f; color: #0e1210; }
+.dark .panel-foot { color: #7a8a84; }
+.dark .chart-head .eyebrow { color: #9aa6a1; }
+.dark .chart-title { color: #c8d5d0; }
+.dark .chart-unit { color: #7a8a84; }
+.dark .chart-y-labels { color: #7a8a84; }
+.dark .chart-x-labels { color: #7a8a84; }
+.dark .chart-gridline { stroke: #2a352f; }
+.dark .threshold-line { stroke: #3a4a43; }
+.dark .chart-path { stroke: #3aa79f; }
+.dark .chart-point { fill: #0e1210; stroke: #3aa79f; }
+.dark .chart-point.active { fill: #3aa79f; stroke: #0e1210; }
+.dark .chart-area rect { fill: rgba(58,167,159,0.07); }
+.dark .chart-callout { color: #5ac18a; border-color: #2a352f; }
+.dark .chart-callout.excursion { color: #d19a4a; }
+.dark .callout-marker { background: #5ac18a; }
+.dark .chart-callout.excursion .callout-marker { background: #d19a4a; }
 .dark .ledger-table { border-color: #2a352f; }
 .dark .footer { border-color: #24302c; color: #7a8a84; }
 .dark .loading-screen { background: #0e1210; }

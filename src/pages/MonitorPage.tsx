@@ -92,8 +92,8 @@ export default function MonitorPage() {
               variant={status === "SAFE" ? "secondary" : "destructive"}
               className={
                 status === "SAFE"
-                  ? "w-fit bg-[#e6f0e9] text-[#318b5d] border-[#cbd2c6] font-mono text-[11px] tracking-[0.16em]"
-                  : "w-fit bg-[#f9e8c9] text-[#8a5510] border-[#d19a4a] font-mono text-[11px] tracking-[0.16em]"
+                  ? "w-fit bg-[#e6f0e9] dark:bg-[#1e2623] text-[#318b5d] dark:text-[#5ac18a] border-[#cbd2c6] dark:border-[#2a352f] font-mono text-[11px] tracking-[0.16em]"
+                  : "w-fit bg-[#f9e8c9] dark:bg-[#2a1f0a] text-[#8a5510] dark:text-[#d19a4a] border-[#d19a4a] dark:border-[#5a3d16] font-mono text-[11px] tracking-[0.16em]"
               }
             >
               {status}
@@ -114,8 +114,8 @@ export default function MonitorPage() {
               onClick={() => setIsMonitoring((current) => !current)}
               className={`mt-auto w-full rounded-none font-mono text-[9px] tracking-[0.05em] h-10 gap-2 ${
                 isMonitoring
-                  ? "bg-[#172019] hover:bg-[#1d5d59] text-[#f3f4ed] border-[#172019]"
-                  : "bg-[#267e79] hover:bg-[#1d5d59] text-white border-[#267e79]"
+                  ? "bg-[#172019] hover:bg-[#1d5d59] text-[#f3f4ed] border-[#172019] dark:bg-[#e8e9e3] dark:hover:bg-[#c8d5d0] dark:text-[#0e1210] dark:border-[#e8e9e3]"
+                  : "bg-[#267e79] hover:bg-[#1d5d59] text-white border-[#267e79] dark:bg-[#3aa79f] dark:hover:bg-[#2e9e98] dark:text-[#0e1210] dark:border-[#3aa79f]"
               }`}
             >
               {isMonitoring ? <Pause size={12} aria-hidden="true" /> : <Play size={12} aria-hidden="true" />}
@@ -196,17 +196,17 @@ export default function MonitorPage() {
             {/* Hover tooltip */}
             {hoveredReading && hoveredX !== null && hoveredY !== null && (
               <div
-                className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-[calc(100%+12px)] bg-white border border-[#cbd2c6] rounded-lg shadow-[0_8px_24px_rgba(23,32,25,0.12)] px-3 py-2 min-w-[108px]"
+                className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-[calc(100%+12px)] bg-white dark:bg-[#1c2220] border border-[#cbd2c6] dark:border-[#2a352f] rounded-lg shadow-[0_8px_24px_rgba(23,32,25,0.12)] dark:shadow-[0_8px_24px_rgba(0,0,0,0.32)] px-3 py-2 min-w-[108px]"
                 style={{ left: `${(hoveredIndex! / Math.max(readings.length - 1, 1)) * 100}%`, top: `${(hoveredY / 190) * 100}%` }}
               >
-                <div className="font-mono text-[8px] tracking-[0.1em] text-[#5a6a62]">TIME</div>
-                <div className="font-mono text-[11px] font-bold text-[#172019]">{hoveredReading.time}</div>
+                <div className="font-mono text-[8px] tracking-[0.1em] text-[#5a6a62] dark:text-[#9aa6a1]">TIME</div>
+                <div className="font-mono text-[11px] font-bold text-[#172019] dark:text-[#e8e9e3]">{hoveredReading.time}</div>
                 <div className="mt-1 flex items-baseline gap-1.5">
-                  <span className="font-mono text-[14px] font-bold tracking-[-0.04em] text-[#1d5d59]">{hoveredReading.value.toFixed(1)}</span>
-                  <span className="font-mono text-[8px] text-[#667068]">deg C</span>
-                  <span className={`ml-auto h-1.5 w-1.5 rounded-full ${hoveredReading.value < 2 || hoveredReading.value > 8 ? "bg-[#d19a4a]" : "bg-[#318b5d]"}`} />
+                  <span className="font-mono text-[14px] font-bold tracking-[-0.04em] text-[#1d5d59] dark:text-[#7ec8c1]">{hoveredReading.value.toFixed(1)}</span>
+                  <span className="font-mono text-[8px] text-[#667068] dark:text-[#9aa6a1]">deg C</span>
+                  <span className={`ml-auto h-1.5 w-1.5 rounded-full ${hoveredReading.value < 2 || hoveredReading.value > 8 ? "bg-[#d19a4a]" : "bg-[#318b5d] dark:bg-[#5ac18a]"}`} />
                 </div>
-                <div className="absolute left-1/2 top-full h-2 w-2 -translate-x-1/2 -translate-y-[4px] rotate-45 bg-white border-r border-b border-[#cbd2c6]" />
+                <div className="absolute left-1/2 top-full h-2 w-2 -translate-x-1/2 -translate-y-[4px] rotate-45 bg-white dark:bg-[#1c2220] border-r border-b border-[#cbd2c6] dark:border-[#2a352f]" />
               </div>
             )}
           </div>
