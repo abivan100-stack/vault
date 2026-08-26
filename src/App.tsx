@@ -44,7 +44,7 @@ function Layout({ isDark, toggleDark }: { isDark: boolean; toggleDark: () => voi
       <header className="topbar">
         <Link className="brand" to="/shipment" aria-label="Vault home">
           <span className="brand-mark">
-            <Shield size={16} strokeWidth={2.5} aria-hidden="true" />
+            <Package size={15} strokeWidth={2} aria-hidden="true" />
           </span>
           <span>
             <strong>VAULT</strong>

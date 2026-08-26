@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import anime from "animejs";
-import { Shield } from "lucide-react";
+import { Package } from "lucide-react";
 
 export default function LoadingScreen({ onFinished }: { onFinished?: () => void }) {
   useEffect(() => {
@@ -48,9 +48,9 @@ export default function LoadingScreen({ onFinished }: { onFinished?: () => void 
       <div className="absolute inset-0 opacity-[0.04] dark:opacity-[0.06]" style={{ backgroundImage: "linear-gradient(rgba(52,91,74,0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(52,91,74,0.08) 1px, transparent 1px)", backgroundSize: "32px 32px" }} />
       <div className="relative flex flex-col items-center gap-7">
         <div className="loading-mark relative grid place-items-center">
-          <div className="loading-ring absolute inset-0 -m-3 rounded-full border border-[#267e79]/20 border-t-[#267e79]/60 border-dashed" style={{ width: "68px", height: "68px", left: "-10px", top: "-10px" }} />
-          <div className="h-[48px] w-[48px] rounded-[12px] bg-gradient-to-br from-[#2e9e98] via-[#267e79] to-[#1b5a56] grid place-items-center shadow-[0_8px_24px_rgba(38,126,121,0.28)] border border-white/15">
-            <Shield size={20} strokeWidth={2.2} className="text-white" />
+          <div className="loading-ring absolute inset-0 -m-3 rounded-full border border-[#267e79]/15" style={{ width: "64px", height: "64px", left: "-10px", top: "-10px" }} />
+          <div className="h-[44px] w-[44px] rounded-[10px] bg-[#267e79] dark:bg-[#3aa79f] grid place-items-center shadow-[0_4px_12px_rgba(38,126,121,0.18)] border border-[#267e79] dark:border-[#3aa79f]">
+            <Package size={18} strokeWidth={2} className="text-white dark:text-[#0e1210]" />
           </div>
         </div>
         <div className="loading-title text-center">
