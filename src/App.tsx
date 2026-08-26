@@ -117,7 +117,7 @@ function App() {
             <div className="orbit-ring ring-one" />
             <div className="orbit-ring ring-two" />
             <div className={`orbit-core ${status.toLowerCase()}`}>
-              <span className="shield-glyph" aria-hidden="true">OK</span>
+              <span className="shield-glyph" aria-hidden="true">{status === "SAFE" ? "OK" : "!!"}</span>
               <strong>{status}</strong>
               <span>{status === "SAFE" ? "2-8 deg C corridor" : "outside corridor"}</span>
             </div>
