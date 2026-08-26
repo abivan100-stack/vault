@@ -1,11 +1,10 @@
 import { useEffect, useState } from "react";
 import anime from "animejs";
 import { NavLink, Outlet, Link, useLocation } from "react-router-dom";
-import { Shield, HelpCircle, Activity, Database, Package, Info, Sun, Moon } from "lucide-react";
+import { Shield, HelpCircle, Activity, Database, Package, Sun, Moon } from "lucide-react";
 import { ColdChainProvider } from "./context/ColdChainContext";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Separator } from "@/components/ui/separator";
 import LoadingScreen from "./components/LoadingScreen";
 
 function Layout({ isDark, toggleDark }: { isDark: boolean; toggleDark: () => void }) {
@@ -78,43 +77,71 @@ function Layout({ isDark, toggleDark }: { isDark: boolean; toggleDark: () => voi
       </header>
 
       <Dialog open={helpOpen} onOpenChange={setHelpOpen}>
-        <DialogContent className="max-w-[480px] bg-white dark:bg-[#171c19]">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 font-mono text-[11px] tracking-[0.12em]">
-              <Info size={14} className="text-[#267e79]" /> VAULT — HELP
+        <DialogContent className="max-w-[560px] max-h-[86vh] overflow-hidden bg-white dark:bg-[#171c19] p-0 gap-0 border dark:border-[#2a352f]">
+          <DialogHeader className="p-6 pb-4 border-b border-[#e6ebe4] dark:border-[#2a352f] bg-[#f7f8f4] dark:bg-[#1c2220]">
+            <DialogTitle className="flex items-center gap-2.5 font-sans text-[15px] font-semibold tracking-[-0.01em] dark:text-[#e8e9e3]">
+              <span className="h-8 w-8 rounded-lg bg-[#267e79] dark:bg-[#3aa79f] grid place-items-center text-white dark:text-[#0e1210]">
+                <Shield size={14} strokeWidth={2.5} />
+              </span>
+              Vault Help Center
             </DialogTitle>
-            <DialogDescription className="font-mono text-[9px] text-[#5a6a62] dark:text-[#9aa6a1]">Cold-chain integrity console • local simulation mode</DialogDescription>
+            <DialogDescription className="font-sans text-[13px] leading-[1.5] text-[#5a6a62] dark:text-[#9aa6a1]">Cold-chain integrity console — local simulation, no hardware needed. Here’s how to use it in 60 seconds.</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-2">
-            <div className="flex gap-3 items-start">
-              <Activity size={16} className="text-[#267e79] mt-0.5 shrink-0" />
+
+          <div className="overflow-auto max-h-[60vh] p-6 space-y-5">
+            <div className="flex gap-3 items-start rounded-lg border border-[#e6ebe4] dark:border-[#2a352f] bg-[#f7f8f4] dark:bg-[#1c2220] p-3.5">
+              <Activity size={18} className="text-[#267e79] dark:text-[#3aa79f] mt-0.5 shrink-0" />
               <div>
-                <div className="font-mono text-[9px] font-bold tracking-[0.08em]">LIVE SIMULATION</div>
-                <p className="font-mono text-[9px] leading-[1.6] text-[#5a6a62] dark:text-[#9aa6a1]">Temperature is simulated every 2s (2–8°C corridor, clamped 1.5–8.5). No DHT22 attached. Data lives in browser state + localStorage for shipment.</p>
+                <div className="font-sans text-[13px] font-semibold tracking-[-0.01em] dark:text-[#e8e9e3]">Live simulation — what you’re seeing</div>
+                <p className="font-sans text-[13px] leading-[1.6] text-[#33413d] dark:text-[#c8d5d0] mt-1">Temperature is generated every 2 seconds within the 2–8°C corridor (clamped 1.5–8.5 for excursion testing). No DHT22 sensor is attached. Readings live in React state and the shipment log persists to <span className="font-mono text-[11px] bg-white dark:bg-[#0e1210] border dark:border-[#2a352f] px-1.5 py-0.5 rounded">localStorage vault:fieldLog</span>.</p>
               </div>
             </div>
-            <Separator />
-            <div className="grid grid-cols-3 gap-3">
-              <div className="rounded-lg border border-[#e6ebe4] dark:border-[#2a352f] bg-[#f7f8f4] dark:bg-[#1c2220] p-3">
-                <Package size={14} className="text-[#1d5d59] dark:text-[#7ec8c1] mb-1.5" />
-                <div className="font-mono text-[8px] font-bold">SHIPMENT</div>
-                <p className="font-mono text-[8px] text-[#5a6a62] dark:text-[#9aa6a1] leading-[1.5]">Edit box, batch, route. Create, handoff, persist.</p>
-              </div>
-              <div className="rounded-lg border border-[#e6ebe4] dark:border-[#2a352f] bg-[#f7f8f4] dark:bg-[#1c2220] p-3">
-                <Activity size={14} className="text-[#1d5d59] dark:text-[#7ec8c1] mb-1.5" />
-                <div className="font-mono text-[8px] font-bold">MONITOR</div>
-                <p className="font-mono text-[8px] text-[#5a6a62] dark:text-[#9aa6a1] leading-[1.5]">Live temp, hover graph for precise reading, safe corridor.</p>
-              </div>
-              <div className="rounded-lg border border-[#e6ebe4] dark:border-[#2a352f] bg-[#f7f8f4] dark:bg-[#1c2220] p-3">
-                <Database size={14} className="text-[#1d5d59] dark:text-[#7ec8c1] mb-1.5" />
-                <div className="font-mono text-[8px] font-bold">LEDGER</div>
-                <p className="font-mono text-[8px] text-[#5a6a62] dark:text-[#9aa6a1] leading-[1.5]">Immutable trail, copy hash, export CSV.</p>
+
+            <div>
+              <div className="font-sans text-[11px] font-bold tracking-[0.08em] text-[#1d5d59] dark:text-[#7ec8c1]">QUICK START — 3 STEPS</div>
+              <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                <div className="rounded-xl border border-[#cbd2c6] dark:border-[#2a352f] bg-white dark:bg-[#1c2220] p-4 shadow-sm">
+                  <div className="h-7 w-7 rounded-full bg-[#e6f0e9] dark:bg-[#1e2623] grid place-items-center text-[#1d5d59] dark:text-[#7ec8c1] font-mono text-[11px] font-bold">1</div>
+                  <div className="mt-2.5 flex items-center gap-1.5 font-sans text-[13px] font-semibold dark:text-[#e8e9e3]">
+                    <Package size={14} className="text-[#267e79] dark:text-[#3aa79f]" /> Shipment
+                  </div>
+                  <p className="font-sans text-[12px] leading-[1.55] text-[#5a6a62] dark:text-[#9aa6a1] mt-1.5">Open <span className="font-medium text-[#1d5d59] dark:text-[#7ec8c1]">Shipment → Manage</span> to edit box, batch, doses or route. Use Copy, Handoff, or New Shipment — changes reflect instantly on the overview.</p>
+                </div>
+                <div className="rounded-xl border border-[#cbd2c6] dark:border-[#2a352f] bg-white dark:bg-[#1c2220] p-4 shadow-sm">
+                  <div className="h-7 w-7 rounded-full bg-[#e6f0e9] dark:bg-[#1e2623] grid place-items-center text-[#1d5d59] dark:text-[#7ec8c1] font-mono text-[11px] font-bold">2</div>
+                  <div className="mt-2.5 flex items-center gap-1.5 font-sans text-[13px] font-semibold dark:text-[#e8e9e3]">
+                    <Activity size={14} className="text-[#267e79] dark:text-[#3aa79f]" /> Monitor
+                  </div>
+                  <p className="font-sans text-[12px] leading-[1.55] text-[#5a6a62] dark:text-[#9aa6a1] mt-1.5">Watch the live gauge and hover the chart for precise °C at any timestamp. Status turns <span className="font-medium">EXCURSION</span> outside 2–8°C.</p>
+                </div>
+                <div className="rounded-xl border border-[#cbd2c6] dark:border-[#2a352f] bg-white dark:bg-[#1c2220] p-4 shadow-sm">
+                  <div className="h-7 w-7 rounded-full bg-[#e6f0e9] dark:bg-[#1e2623] grid place-items-center text-[#1d5d59] dark:text-[#7ec8c1] font-mono text-[11px] font-bold">3</div>
+                  <div className="mt-2.5 flex items-center gap-1.5 font-sans text-[13px] font-semibold dark:text-[#e8e9e3]">
+                    <Database size={14} className="text-[#267e79] dark:text-[#3aa79f]" /> Ledger
+                  </div>
+                  <p className="font-sans text-[12px] leading-[1.55] text-[#5a6a62] dark:text-[#9aa6a1] mt-1.5">Every reading is hashed. Use search, copy the full hash, or export CSV for audit. Open Full Ledger for the complete trail.</p>
+                </div>
               </div>
             </div>
-            <p className="font-mono text-[8px] text-[#667068] dark:text-[#9aa6a1]">Tip: Green dot = simulation active. Pause via Monitor. Data resets on New Shipment. Toggle dark via moon/sun.</p>
+
+            <div className="rounded-lg bg-[#f7f8f4] dark:bg-[#1c2220] border border-[#e6ebe4] dark:border-[#2a352f] p-3.5">
+              <div className="font-sans text-[12px] font-semibold dark:text-[#e8e9e3]">Tips that actually help</div>
+              <ul className="mt-2 space-y-1.5 font-sans text-[12px] leading-[1.55] text-[#33413d] dark:text-[#c8d5d0] list-disc pl-4">
+                <li>
+                  <span className="font-medium">Green dot</span> = simulation active. Pause it from Monitor → <span className="font-mono text-[11px] bg-white dark:bg-[#0e1210] border dark:border-[#2a352f] px-1 rounded">PAUSE SIMULATION</span>.
+                </li>
+                <li>New Shipment resets the log, batch and the chart — great for demos.</li>
+                <li>Toggle dark/light with the sun/moon in the header. Preference is saved.</li>
+                <li>Need a handoff proof? Use Shipment → Manage → Handoff — it stamps DELHI → JAIPUR.</li>
+              </ul>
+            </div>
           </div>
-          <div className="flex justify-end">
-            <Button onClick={() => setHelpOpen(false)} className="bg-[#267e79] hover:bg-[#1d5d59] text-white font-mono text-[9px] h-7">GOT IT</Button>
+
+          <div className="p-4 border-t border-[#e6ebe4] dark:border-[#2a352f] bg-[#fcfdfb] dark:bg-[#0e1210] flex items-center justify-between gap-3">
+            <div className="font-mono text-[8px] text-[#667068] dark:text-[#7a8a84]">VAULT 01 • local simulation • v0.1.0</div>
+            <Button onClick={() => setHelpOpen(false)} className="bg-[#267e79] hover:bg-[#1d5d59] text-white font-sans text-[13px] font-medium rounded-full px-6 h-9 shadow-sm">
+              Got it
+            </Button>
           </div>
         </DialogContent>
       </Dialog>
