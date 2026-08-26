@@ -1,21 +1,22 @@
 import { useEffect, useState } from "react";
 import anime from "animejs";
 import { useNavigate } from "react-router-dom";
-import { ShieldCheck, ShieldAlert, Copy, CheckCircle2, ArrowRight, Settings2 } from "lucide-react";
+import { ShieldCheck, ShieldAlert, Copy, CheckCircle2, ArrowRight, Settings2, Package, Thermometer, MapPin, Clock3, Hash, Boxes, Truck } from "lucide-react";
 import { useColdChain } from "../context/ColdChainContext";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Separator } from "@/components/ui/separator";
 
 export default function ShipmentPage() {
-  const { fieldLogMeta, status } = useColdChain();
+  const { fieldLogMeta, status, temperature } = useColdChain();
   const navigate = useNavigate();
   const [toast, setToast] = useState<string | null>(null);
 
   useEffect(() => {
     anime({ targets: ".shipment-header", translateY: [8, 0], opacity: [0, 1], duration: 520, easing: "easeOutExpo" });
-    anime({ targets: ".field-log", translateY: [12, 0], opacity: [0, 1], duration: 560, delay: 80, easing: "easeOutExpo" });
-    return () => anime.remove(".shipment-header, .field-log");
+    anime({ targets: ".shipment-grid > div", translateY: [12, 0], opacity: [0, 1], delay: anime.stagger(80), duration: 560, easing: "easeOutExpo" });
+    return () => anime.remove(".shipment-header, .shipment-grid > div");
   }, []);
 
   useEffect(() => {
@@ -38,73 +39,78 @@ export default function ShipmentPage() {
   };
 
   return (
-    <div className="space-y-0">
-      <section className="shipment-header pt-8 pb-6 border-b border-[#cbd2c6] dark:border-[#2a352f]">
-        <div className="eyebrow">03 / SHIPMENT</div>
-        <div className="mt-2 flex flex-wrap items-end justify-between gap-4">
-          <div>
-            <h1 className="text-[28px] font-semibold tracking-[-0.04em] text-[#172019] dark:text-[#e8e9e3]">Shipment overview.</h1>
-            <p className="mt-1.5 max-w-[560px] font-mono text-[9px] leading-[1.6] text-[#5a6a62] dark:text-[#9aa6a1]">A precise record for one box, one batch, one corridor. No flash — just the facts.</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Badge variant="outline" className={status === "SAFE" ? "bg-[#e6f0e9] dark:bg-[#1e2623] text-[#318b5d] dark:text-[#5ac18a] border-[#cbd2c6] dark:border-[#2a352f] text-[7px] h-5" : "bg-[#f9e8c9] dark:bg-[#2a1f0a] text-[#8a5510] dark:text-[#d19a4a] text-[7px] h-5"}>
-              {status === "SAFE" ? <ShieldCheck size={10} /> : <ShieldAlert size={10} />} {status}
-            </Badge>
-            <Button onClick={() => navigate("/shipment/manage")} className="bg-[#267e79] hover:bg-[#1d5d59] text-white font-sans text-[13px] font-medium tracking-[-0.01em] h-10 px-6 gap-2 rounded-full shadow-sm">
-              <Settings2 size={14} /> Manage
-            </Button>
-          </div>
+    <div className="space-y-6">
+      <section className="shipment-header flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between border-b border-[#cbd2c6] dark:border-[#2a352f] pb-6">
+        <div>
+          <div className="eyebrow">03 / SHIPMENT</div>
+          <h1 className="mt-2 text-[28px] font-semibold tracking-[-0.04em] text-[#172019] dark:text-[#e8e9e3]">Shipment overview</h1>
+          <p className="mt-1.5 max-w-[560px] font-mono text-[9px] leading-[1.6] text-[#5a6a62] dark:text-[#9aa6a1]">Production-grade record for one box, one batch, one corridor. No flash — just verifiable facts.</p>
+        </div>
+        <div className="flex items-center gap-2 shrink-0">
+          <Badge variant="outline" className={status === "SAFE" ? "bg-[#e6f0e9] dark:bg-[#1e2623] text-[#318b5d] dark:text-[#5ac18a] border-[#cbd2c6] dark:border-[#2a352f] text-[7px] h-6 gap-1.5 px-2.5" : "bg-[#f9e8c9] dark:bg-[#2a1f0a] text-[#8a5510] dark:text-[#d19a4a] text-[7px] h-6 gap-1.5 px-2.5"}>
+            {status === "SAFE" ? <ShieldCheck size={11} /> : <ShieldAlert size={11} />} {status} • {temperature.toFixed(1)}°C
+          </Badge>
+          <Button onClick={() => navigate("/shipment/manage")} className="bg-[#267e79] hover:bg-[#1d5d59] text-white font-sans text-[13px] font-medium tracking-[-0.01em] h-9 px-5 gap-2 rounded-full shadow-sm">
+            <Settings2 size={14} /> Manage
+          </Button>
         </div>
       </section>
 
-      <section className="py-8 flex justify-center">
-        <Card className="field-log w-full max-w-[380px] gap-0 !p-0 overflow-hidden bg-white dark:bg-[#171c19] border-[#cbd2c6] dark:border-[#2a352f] rounded-[10px] shadow-[0_8px_24px_rgba(23,32,25,0.08)] dark:shadow-[0_8px_24px_rgba(0,0,0,0.32)]">
-          <CardContent className="p-[22px_20px_20px]">
-            <div className="flex items-start justify-between gap-2">
-              <div className="eyebrow text-[#172019] dark:text-[#e8e9e3] font-bold tracking-[0.11em] text-[9.5px]">{fieldLogMeta.logId}</div>
-              <span className="font-mono text-[7px] tracking-[0.1em] text-[#5a6a62] dark:text-[#7a8a84] border border-[#e6ebe4] dark:border-[#2a352f] rounded-full px-2 py-1 bg-[#f7f8f4] dark:bg-[#1c2220]">VCC • {fieldLogMeta.box.split("-").pop()}</span>
+      <div className="shipment-grid grid gap-4 lg:grid-cols-3">
+        {/* Primary shipment card */}
+        <Card className="lg:col-span-2 overflow-hidden border-[#cbd2c6] dark:border-[#2a352f] bg-white dark:bg-[#171c19] shadow-[0_8px_24px_rgba(23,32,25,0.06)] dark:shadow-[0_8px_24px_rgba(0,0,0,0.24)]">
+          <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
+            <div>
+              <CardTitle className="font-mono text-[10px] tracking-[0.12em] flex items-center gap-2">
+                <Package size={14} className="text-[#267e79] dark:text-[#3aa79f]" /> {fieldLogMeta.logId}
+              </CardTitle>
+              <CardDescription className="font-mono text-[8px] mt-1">Immutable field log — source of truth for this corridor.</CardDescription>
             </div>
-            <div className="log-rule border-t-[1.5px] border-[#e0e6dd] dark:border-[#2a352f] mt-[14px] mb-[2px]" />
-            <dl className="m-0">
-              <div className="py-[12px] border-b border-[#e6ebe4] dark:border-[#2a352f] flex flex-col gap-1">
-                <dt className="font-mono text-[8px] font-bold text-[#267e79] dark:text-[#3aa79f] tracking-[0.14em] uppercase">BOX</dt>
-                <dd className="font-mono text-[10.5px] font-semibold text-[#172019] dark:text-[#e8e9e3] flex items-center justify-between gap-2">
-                  {fieldLogMeta.box}
-                  <button onClick={handleCopy} className="p-1 rounded hover:bg-[#f7f8f4] dark:hover:bg-[#24302c] transition-colors" aria-label="Copy box">
-                    <Copy size={12} className="text-[#667068] dark:text-[#7a8a84]" />
-                  </button>
-                </dd>
+            <Button variant="ghost" size="sm" onClick={handleCopy} className="h-7 w-7 p-0 rounded-full">
+              <Copy size={14} className="text-[#667068] dark:text-[#7a8a84]" />
+            </Button>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-lg border border-[#e6ebe4] dark:border-[#2a352f] bg-[#f7f8f4] dark:bg-[#1c2220] p-3">
+                <div className="flex items-center gap-1.5 font-mono text-[7px] font-bold tracking-[0.12em] text-[#267e79] dark:text-[#3aa79f]">
+                  <Boxes size={10} /> BOX
+                </div>
+                <div className="mt-1 font-mono text-[11px] font-bold tracking-[-0.01em] text-[#172019] dark:text-[#e8e9e3]">{fieldLogMeta.box}</div>
+                <div className="font-mono text-[7px] text-[#7a8a84]">{fieldLogMeta.batch}</div>
               </div>
-              <div className="py-[12px] border-b border-[#e6ebe4] dark:border-[#2a352f] flex flex-col gap-1">
-                <dt className="font-mono text-[8px] font-bold text-[#267e79] dark:text-[#3aa79f] tracking-[0.14em] uppercase">PRODUCT</dt>
-                <dd className="font-mono text-[10.5px] font-semibold text-[#172019] dark:text-[#e8e9e3]">{fieldLogMeta.product}</dd>
-              </div>
-              <div className="py-[12px] border-b border-[#e6ebe4] dark:border-[#2a352f] flex flex-col gap-1">
-                <dt className="font-mono text-[8px] font-bold text-[#267e79] dark:text-[#3aa79f] tracking-[0.14em] uppercase">BATCH</dt>
-                <dd className="font-mono text-[10.5px] font-semibold text-[#172019] dark:text-[#e8e9e3]">{fieldLogMeta.batch}</dd>
-              </div>
-              <div className="py-[12px] border-b border-[#e6ebe4] dark:border-[#2a352f] flex flex-col gap-1">
-                <dt className="font-mono text-[8px] font-bold text-[#267e79] dark:text-[#3aa79f] tracking-[0.14em] uppercase">DOSES</dt>
-                <dd className="font-mono text-[10.5px] font-semibold text-[#172019] dark:text-[#e8e9e3]">{fieldLogMeta.doses}</dd>
-              </div>
-              <div className="py-[12px] flex flex-col gap-1">
-                <dt className="font-mono text-[8px] font-bold text-[#267e79] dark:text-[#3aa79f] tracking-[0.14em] uppercase">RANGE</dt>
-                <dd className="font-mono text-[10.5px] font-semibold text-[#172019] dark:text-[#e8e9e3]">{fieldLogMeta.range}</dd>
-              </div>
-            </dl>
-            <div className="log-foot font-mono bg-[#f7f8f4] dark:bg-[#1c2220] border border-[#e6ebe4] dark:border-[#2a352f] rounded-md p-[10px_12px] text-[8px] leading-[1.7] mt-2 font-semibold tracking-[0.04em] text-[#172019] dark:text-[#c8d5d0]">
-              STARTED {fieldLogMeta.started}
-              <br />
-              ROUTE / {fieldLogMeta.route}
-              <div className="mt-2 flex gap-1.5">
-                <Badge variant="secondary" className="bg-[#e6f0e9] dark:bg-[#1e2623] text-[#318b5d] dark:text-[#5ac18a] border text-[7px] px-1.5 py-0">
-                  LIVE
-                </Badge>
-                <Badge variant="outline" className="font-mono text-[7px] dark:text-[#9aa6a1] dark:border-[#2a352f]">
-                  SHIPMENT
-                </Badge>
+              <div className="rounded-lg border border-[#e6ebe4] dark:border-[#2a352f] bg-[#f7f8f4] dark:bg-[#1c2220] p-3">
+                <div className="flex items-center gap-1.5 font-mono text-[7px] font-bold tracking-[0.12em] text-[#267e79] dark:text-[#3aa79f]">
+                  <Package size={10} /> PRODUCT
+                </div>
+                <div className="mt-1 font-mono text-[11px] font-bold tracking-[-0.01em] text-[#172019] dark:text-[#e8e9e3] truncate">{fieldLogMeta.product}</div>
+                <div className="font-mono text-[7px] text-[#7a8a84]">{fieldLogMeta.doses} • {fieldLogMeta.range}</div>
               </div>
             </div>
+
+            <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+              <div className="rounded-lg bg-[#f7f8f4] dark:bg-[#1c2220] border border-[#e6ebe4] dark:border-[#2a352f] p-2.5">
+                <div className="font-mono text-[7px] tracking-[0.1em] text-[#5a6a62] dark:text-[#9aa6a1]">BATCH</div>
+                <div className="mt-1 font-mono text-[9px] font-bold truncate">{fieldLogMeta.batch}</div>
+              </div>
+              <div className="rounded-lg bg-[#f7f8f4] dark:bg-[#1c2220] border border-[#e6ebe4] dark:border-[#2a352f] p-2.5">
+                <div className="font-mono text-[7px] tracking-[0.1em] text-[#5a6a62] dark:text-[#9aa6a1]">DOSES</div>
+                <div className="mt-1 font-mono text-[9px] font-bold">{fieldLogMeta.doses}</div>
+              </div>
+              <div className="rounded-lg bg-[#f7f8f4] dark:bg-[#1c2220] border border-[#e6ebe4] dark:border-[#2a352f] p-2.5">
+                <div className="font-mono text-[7px] tracking-[0.1em] text-[#5a6a62] dark:text-[#9aa6a1]">RANGE</div>
+                <div className="mt-1 font-mono text-[9px] font-bold">{fieldLogMeta.range}</div>
+              </div>
+            </div>
+
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              <Badge variant="secondary" className="bg-[#e6f0e9] dark:bg-[#1e2623] text-[#318b5d] dark:text-[#5ac18a] border text-[7px]"><CheckCircle2 size={10} /> LIVE</Badge>
+              <Badge variant="outline" className="font-mono text-[7px] dark:border-[#2a352f]">VCC • {fieldLogMeta.box.split("-").pop()}</Badge>
+              <Badge variant="outline" className="font-mono text-[7px] flex items-center gap-1 dark:border-[#2a352f]">
+                <Hash size={10} /> {fieldLogMeta.batch.slice(0, 12)}
+              </Badge>
+            </div>
+
             {toast && (
               <div className="mt-3 rounded-md bg-[#172019] dark:bg-[#0e1210] text-white text-[9px] font-mono px-3 py-2 flex items-center gap-2 border dark:border-[#2a352f]">
                 <CheckCircle2 size={12} className="text-[#7ec8a1]" /> {toast}
@@ -112,18 +118,66 @@ export default function ShipmentPage() {
             )}
           </CardContent>
         </Card>
-      </section>
 
-      <div className="border-t border-[#cbd2c6] dark:border-[#2a352f] pt-6 pb-2 flex items-center justify-between gap-3">
-        <div className="font-mono text-[8px] text-[#667068] dark:text-[#7a8a84]">Need to edit? The shipment workspace is the dedicated place — not the display.</div>
-        <Button variant="outline" onClick={() => navigate("/shipment/manage")} className="font-sans text-[13px] font-medium tracking-[-0.01em] h-10 px-6 gap-2 rounded-full border-[1.5px] bg-white dark:bg-[#1c2220] shadow-sm shrink-0">
-          <Settings2 size={14} /> Open workspace
-        </Button>
+        {/* Route + live */}
+        <div className="space-y-4">
+          <Card className="overflow-hidden border-[#cbd2c6] dark:border-[#2a352f] bg-white dark:bg-[#171c19]">
+            <CardHeader className="pb-2">
+              <CardTitle className="font-mono text-[9px] tracking-[0.12em] flex items-center gap-1.5">
+                <MapPin size={12} className="text-[#267e79] dark:text-[#3aa79f]" /> ROUTE • LIVE CORRIDOR
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-center">
+                  <div className="h-2.5 w-2.5 rounded-full bg-[#318b5d] dark:bg-[#5ac18a] mx-auto shadow-[0_0_0_4px_rgba(49,139,93,0.14)]" />
+                  <div className="mt-1 font-mono text-[8px] font-bold">DELHI</div>
+                  <div className="font-mono text-[7px] text-[#7a8a84]">Origin</div>
+                </div>
+                <div className="flex-1 mx-2 flex items-center gap-1">
+                  <div className="h-[2px] flex-1 bg-[#cbd2c6] dark:bg-[#2a352f] rounded-full" />
+                  <Truck size={12} className="text-[#267e79] dark:text-[#3aa79f] shrink-0" />
+                  <div className="h-[2px] flex-1 bg-gradient-to-r from-[#267e79] to-[#cbd2c6] dark:from-[#3aa79f] dark:to-[#2a352f] rounded-full" />
+                </div>
+                <div className="text-center">
+                  <div className="h-2.5 w-2.5 rounded-full bg-white dark:bg-[#1c2220] border-2 border-[#267e79] dark:border-[#3aa79f] mx-auto" />
+                  <div className="mt-1 font-mono text-[8px] font-bold">JAIPUR</div>
+                  <div className="font-mono text-[7px] text-[#7a8a84]">Destination</div>
+                </div>
+              </div>
+              <div className="rounded-md bg-[#f7f8f4] dark:bg-[#1c2220] border border-[#e6ebe4] dark:border-[#2a352f] p-2.5 flex items-center justify-between">
+                <div className="font-mono text-[8px]">
+                  <div className="text-[#5a6a62] dark:text-[#9aa6a1] tracking-[0.08em]">STARTED</div>
+                  <div className="font-bold text-[#172019] dark:text-[#e8e9e3]">{fieldLogMeta.started}</div>
+                </div>
+                <Separator orientation="vertical" className="h-8" />
+                <div className="font-mono text-[8px] text-right">
+                  <div className="text-[#5a6a62] dark:text-[#9aa6a1] tracking-[0.08em]">CORRIDOR</div>
+                  <div className="font-bold text-[#1d5d59] dark:text-[#7ec8c1]">{fieldLogMeta.range}</div>
+                </div>
+              </div>
+              <Button variant="outline" className="w-full font-sans text-[12px] font-medium h-8 rounded-full gap-1.5" onClick={() => navigate("/monitor")}>
+                <Thermometer size={12} /> View live temp <ArrowRight size={12} />
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Card className="border-[#cbd2c6] dark:border-[#2a352f] bg-[#f7f8f4] dark:bg-[#1c2220]">
+            <CardContent className="p-3 flex items-start gap-2.5">
+              <Clock3 size={14} className="text-[#267e79] dark:text-[#3aa79f] mt-0.5 shrink-0" />
+              <div>
+                <div className="font-mono text-[8px] font-bold tracking-[0.08em]">WHY THIS MATTERS</div>
+                <p className="font-mono text-[8px] leading-[1.5] text-[#5a6a62] dark:text-[#9aa6a1] mt-1">One unbroken chain — 250 doses depend on staying 2–8°C. Vault makes the handoff verifiable, not flashy.</p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
-      <div className="pt-6 flex justify-center">
-        <Button variant="outline" className="font-sans text-[13px] font-medium tracking-[-0.01em] h-10 px-6 gap-2 rounded-full border-[1.5px] border-[#267e79] dark:border-[#3aa79f] text-[#1d5d59] dark:text-[#7ec8c1] bg-white dark:bg-[#1c2220] hover:bg-[#e6f0e9] dark:hover:bg-[#1e2623] shadow-sm" onClick={() => navigate("/monitor")}>
-          Go to monitor <ArrowRight size={14} strokeWidth={2} />
+      <div className="flex items-center justify-between gap-3 border-t border-[#cbd2c6] dark:border-[#2a352f] pt-6">
+        <div className="font-mono text-[8px] text-[#667068] dark:text-[#7a8a84]">Need to mutate? Use the dedicated workspace — this overview stays clean.</div>
+        <Button onClick={() => navigate("/shipment/manage")} className="bg-[#172019] dark:bg-[#e8e9e3] dark:text-[#0e1210] hover:bg-black font-sans text-[12px] font-medium h-8 px-4 rounded-full gap-1.5">
+          <Settings2 size={13} /> Open workspace <ArrowRight size={12} />
         </Button>
       </div>
     </div>
