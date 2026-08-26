@@ -130,18 +130,18 @@ export default function LoadingScreen({ onFinished }: { onFinished?: () => void 
         <div className="loading-title text-center">
           <div className="flex gap-[2px] justify-center">
             {"VAULT".split("").map((ch, i) => (
-              <span key={i} className="font-mono text-[13px] tracking-[0.18em] font-bold text-[#172019] dark:text-[#e8e9e3]">
+              <span key={i} className="font-mono text-[15px] tracking-[0.18em] font-bold text-[#172019] dark:text-[#e8e9e3]">
                 {ch}
               </span>
             ))}
           </div>
-          <div className="loading-subtitle mt-1.5 font-mono text-[8px] tracking-[0.16em] text-[#3a4a43] dark:text-[#9aa6a1]">COLD-CHAIN / 01 — INITIALIZING</div>
+          <div className="loading-subtitle mt-1.5 font-mono text-[11px] tracking-[0.16em] text-[#3a4a43] dark:text-[#9aa6a1]">COLD-CHAIN / 01 — INITIALIZING</div>
         </div>
         <div className="loading-bar h-[2px] w-[168px] overflow-hidden rounded-full bg-[#e6ebe4] dark:bg-[#1e2623] relative">
           <div className="loading-bar-inner h-full w-full origin-left bg-[#267e79] dark:bg-[#3aa79f] rounded-full" />
           <div className="loading-shimmer absolute inset-y-0 left-0 w-[48px] bg-gradient-to-r from-transparent via-white/35 dark:via-white/18 to-transparent -translate-x-full" />
         </div>
-        <div className="loading-secure font-mono text-[7px] tracking-[0.12em] text-[#667068] dark:text-[#7a8a84]">SECURE • VERIFIED • LOCAL</div>
+        <div className="loading-secure font-mono text-[10px] tracking-[0.12em] text-[#667068] dark:text-[#7a8a84]">SECURE • VERIFIED • LOCAL</div>
       </div>
     </div>
   );
