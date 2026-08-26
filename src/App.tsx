@@ -39,6 +39,23 @@ function App() {
   const [readings, setReadings] = useState(seedReadings);
   const status: Status = temperature < 2 || temperature > 8 ? "EXCURSION" : "SAFE";
 
+  const fieldLogMeta = useMemo(() => {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, "0");
+    const d = String(now.getDate()).padStart(2, "0");
+    return {
+      logId: `FIELD LOG / ${y}-${m}${d}-00124`,
+      box: "VCC-BOX-001",
+      product: "IPV Polio Vaccine",
+      batch: `VAC-${y}${m}${d}-A124`,
+      doses: "250 units",
+      range: "02.0\u201308.0 \u00B0C",
+      started: now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }),
+      route: "DELHI \u2192 JAIPUR",
+    };
+  }, []);
+
   useEffect(() => {
     if (!isMonitoring) return undefined;
 
@@ -94,16 +111,16 @@ function App() {
       <main id="top" className="page-wrap">
         <section className="intro-grid" id="shipment">
           <aside className="field-log" aria-label="Shipment log">
-            <div className="eyebrow">FIELD LOG / 2026-00124</div>
+            <div className="eyebrow">{fieldLogMeta.logId}</div>
             <div className="log-rule" />
             <dl>
-              <div><dt>BOX</dt><dd>VCC-BOX-001</dd></div>
-              <div><dt>PRODUCT</dt><dd>Demo Vaccine A</dd></div>
-              <div><dt>BATCH</dt><dd>VAC-B2418</dd></div>
-              <div><dt>DOSES</dt><dd>250 units</dd></div>
-              <div><dt>RANGE</dt><dd>02.0-08.0 deg C</dd></div>
+              <div><dt>BOX</dt><dd>{fieldLogMeta.box}</dd></div>
+              <div><dt>PRODUCT</dt><dd>{fieldLogMeta.product}</dd></div>
+              <div><dt>BATCH</dt><dd>{fieldLogMeta.batch}</dd></div>
+              <div><dt>DOSES</dt><dd>{fieldLogMeta.doses}</dd></div>
+              <div><dt>RANGE</dt><dd>{fieldLogMeta.range}</dd></div>
             </dl>
-            <div className="log-foot mono">STARTED 13:42:17<br />ROUTE / DELHI -&gt; JAIPUR</div>
+            <div className="log-foot mono">STARTED {fieldLogMeta.started}<br />ROUTE / {fieldLogMeta.route}</div>
           </aside>
 
           <div className="intro-copy">

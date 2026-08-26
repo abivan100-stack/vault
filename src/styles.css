@@ -39,13 +39,15 @@ button { cursor: pointer; }
 .intro-grid { min-height: 610px; display: grid; grid-template-columns: minmax(180px, 235px) minmax(340px, 1fr) minmax(290px, 360px); gap: clamp(28px, 5vw, 78px); align-items: center; padding: 76px 0 90px; }
 .eyebrow { font-family: var(--mono); color: var(--muted); font-size: 9px; letter-spacing: .17em; line-height: 1.4; }
 .teal, .teal-text { color: var(--teal); }
-.field-log { border: 1px solid #9ea99e; padding: 20px 18px 18px; align-self: start; margin-top: 32px; background: rgba(243,244,237,.45); }
-.log-rule { border-top: 1px solid var(--line); margin: 16px 0 4px; }
+.field-log { border: 1.5px solid #cbd2c6; padding: 22px 20px 20px; align-self: start; margin-top: 32px; background: #ffffff; border-radius: 10px; box-shadow: 0 8px 24px rgba(23,32,25,0.08), 0 1px 4px rgba(23,32,25,0.06), inset 0 1px 0 rgba(255,255,255,1); }
+.field-log .eyebrow { color: var(--ink); font-weight: 700; letter-spacing: 0.11em; font-size: 9.5px; }
+.log-rule { border-top: 1.5px solid #e0e6dd; margin: 14px 0 2px; }
 .field-log dl { margin: 0; }
-.field-log dl > div { padding: 11px 0; border-bottom: 1px solid rgba(203,210,198,.75); }
-.field-log dt { font-family: var(--mono); font-size: 8px; color: var(--teal); letter-spacing: .12em; margin-bottom: 4px; }
-.field-log dd { margin: 0; font-family: var(--mono); font-size: 10px; color: var(--ink); }
-.log-foot { color: var(--muted); font-size: 8px; line-height: 1.8; margin-top: 18px; }
+.field-log dl > div { padding: 12px 0; border-bottom: 1px solid #e6ebe4; display: flex; flex-direction: column; gap: 4px; }
+.field-log dl > div:last-child { border-bottom: none; }
+.field-log dt { font-family: var(--mono); font-size: 8px; font-weight: 700; color: var(--teal); letter-spacing: .14em; margin-bottom: 0; text-transform: uppercase; }
+.field-log dd { margin: 0; font-family: var(--mono); font-size: 10.5px; font-weight: 600; color: var(--ink); letter-spacing: 0.02em; }
+.log-foot { color: var(--ink); background: #f7f8f4; border: 1px solid #e6ebe4; border-radius: 6px; padding: 10px 12px; font-size: 8px; line-height: 1.7; margin-top: 16px; font-weight: 600; letter-spacing: 0.04em; }
 .intro-copy { align-self: center; padding-top: 8px; }
 .intro-copy h1 { font-size: clamp(56px, 7.2vw, 104px); line-height: .87; letter-spacing: -.085em; font-weight: 600; margin: 22px 0 29px; max-width: 710px; }
 .intro-copy h1 span { color: var(--teal); }
