@@ -64,7 +64,7 @@ function HashButton({
       type="button"
       onClick={() => onCopy(hash)}
       title={hash}
-      className="inline-flex h-7 items-center gap-2 rounded-md border border-line px-2 transition-colors hover:bg-sunken"
+      className="inline-flex h-7 items-center gap-2 rounded-md border border-line bg-sunken px-2 transition-colors hover:border-line-strong hover:bg-sunken dark:bg-transparent"
       aria-label={isCopied ? "Hash copied" : `Copy full hash ${hash}`}
     >
       <span className="tabular font-mono text-[12px] text-ink-muted">{shortHash(hash)}</span>
@@ -161,8 +161,10 @@ export default function LedgerPage() {
           Entries that were unreadable on load count against integrity too: a
           shortened chain that verifies is still evidence something rewrote it. */}
       <div
-        className={`flex items-start gap-3 rounded-lg border p-3.5 ${
-          isTrustworthy ? "border-line bg-raised" : "border-warning/40 bg-warning-soft"
+        className={`flex items-start gap-3 rounded-lg border p-3.5 shadow-e1 ${
+          isTrustworthy
+            ? "border-line bg-raised"
+            : "border-warning-line bg-warning-soft dark:border-warning/40"
         }`}
       >
         {isTrustworthy ? (

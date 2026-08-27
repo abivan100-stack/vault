@@ -5,9 +5,10 @@ import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
 const statusPillVariants = cva(
-  // Badge carries a transparent 1px border; the hand-rolled pills this replaces
-  // have none, so drop it or every pill grows 2px wider.
-  "border-0",
+  // Badge's 1px border is what carries the tone's edge in light mode, so it is
+  // kept rather than zeroed. The border tokens are transparent in dark, which
+  // leaves the pill looking exactly as it did there.
+  "",
   {
     variants: {
       size: {
