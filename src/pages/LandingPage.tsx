@@ -140,7 +140,7 @@ export default function LandingPage() {
             {
               icon: Activity,
               title: "Watches the corridor",
-              body: `A reading every ${SAMPLE_INTERVAL_MS / 1000} seconds, plotted against the ${SAFE_MIN_C}–${SAFE_MAX_C} °C limits with headroom either side so excursions are visible rather than clamped to the edge.`,
+              body: `A reading every ${SAMPLE_INTERVAL_MS / 1000} seconds, plotted against the ${SAFE_MIN_C}–${SAFE_MAX_C} °C limits with 0.5 °C of headroom either side so excursions are visible rather than clamped to the edge.`,
             },
             {
               icon: Database,

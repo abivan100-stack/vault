@@ -1,81 +1,126 @@
-# Vault — Cold-chain Integrity Console
+# Vault -- cold-chain integrity console
 
-A production-style, dark/light-ready console for monitoring a vaccine cold-chain. It simulates a live temperature corridor locally (no sensor or hardware required), records every reading into an immutable, hashed ledger, and tracks a single shipment's box, batch, route and doses — from loading bay to last-mile handoff.
+A frontend prototype for monitoring a vaccine shipment's cold chain. It simulates a
+temperature corridor in the browser, records events to a hash-chained ledger that can be
+verified after the fact, and tracks one box from loading bay to handoff.
 
-Built as a frontend prototype. Simulation runs entirely in the browser; shipment state persists to `localStorage`, and the ledger is verifiable and exportable.
+There is no backend, no sensor and no authentication. Everything runs in the browser and
+nothing leaves it.
 
 ## Stack
 
-- **React 18** + **TypeScript 5**
-- **Vite 6** with `@vitejs/plugin-react`
-- **Tailwind CSS v4** + **shadcn/ui** (Base UI primitives)
-- **react-router-dom v6** for routing
-- **anime.js** for fluid, tasteful entrance/transition animations
-- **lucide-react** for consistent iconography (no emoji/glyph hacks)
-- **Geist** variable font, DM Sans / Space Mono fallbacks
+- **React 18** + **TypeScript 5** (`strict`)
+- **Vite 6**, `@` -> `./src`
+- **Tailwind CSS v4** (CSS-first `@theme`, no config file) + **shadcn/ui** on **Base UI** primitives
+- **react-router-dom 7**
+- **anime.js** for the two remaining transitions
+- **lucide-react** icons, **Geist** / **Geist Mono** bundled locally
+- **Vitest** for the logic layer
 
 ## Getting started
 
 ```bash
 npm install
-npm run dev        # start Vite dev server
-npm run build      # typecheck + production build
-npm run lint       # eslint
-npm run preview    # preview the production build
+npm run dev         # dev server
+npm run verify      # typecheck + lint + test + build
 ```
+
+Individual steps: `npm run typecheck`, `npm run lint`, `npm test`, `npm run build`.
 
 ## Routes
 
-| Route                | Page               | Purpose                                                       |
-| -------------------- | ------------------ | ------------------------------------------------------------- |
-| `/`                  | Landing            | Clean hero + VAULT preview + "WHY VAULT" feature cards         |
-| `/monitor`           | Monitor            | Live temperature gauge, status, interactive history chart      |
-| `/ledger`            | Ledger             | Append-only hashed table, search, copy hash, full trail, CSV   |
-| `/shipment`          | Shipment overview  | One-box, one-batch record: field log meta + route corridor     |
-| `/shipment/manage`   | Manage shipment    | The only place to mutate — edit, copy, handoff, new shipment   |
-| anything else        | —                  | Redirects to `/shipment`                                       |
+| Route              | Purpose                                                             |
+| ------------------ | ------------------------------------------------------------------- |
+| `/`                | Overview with a live preview of the real console state              |
+| `/monitor`         | Gauge, safe-corridor bar, interactive history chart                 |
+| `/ledger`          | Hash-chained trail with chain verification, search, filters, CSV    |
+| `/shipment`        | Read-only shipment record and route                                 |
+| `/shipment/manage` | The only place shipment state is mutated                            |
+| anything else      | Redirects to `/shipment`                                            |
 
 ## How the simulation works
 
-- A temperature reading is generated **every 2 seconds** within the **2–8 °C** corridor, clamped to **1.5–8.5 °C** so excursions can be exercised for testing.
-- The live reading drives the Monitor gauge and the interactive history chart (hover a dot for the precise °C).
-- Status flips to **EXCURSION** whenever the reading leaves 2–8 °C and back to **SAFE** inside it.
-- Readings persist to `localStorage` under **`vault:fieldLog`**; the shipment log, batch and chart reset on **New Shipment**.
-- Dark/light preference is saved under **`vault:theme`** (system default on first run).
-- Press **`⌘K` / `Ctrl+K`** anywhere to open the command palette; use the **help (?) icon** for a 60-second tour.
+- A reading is generated every **2 seconds**.
+- The safe corridor is **2-8 deg C**. The simulated and plotted domain is **1.5-8.5 deg C** -- 0.5 deg C of headroom either side, so an excursion renders in its own space instead
+  of clamping onto the threshold line.
+- Status is `EXCURSION` whenever a reading is outside 2-8 deg C, and `SAFE` inside it.
+- The chart keeps a sliding window of the last 30 readings (~60 seconds). Its axis labels,
+  window label and description are all derived from the readings themselves.
+
+## The ledger
+
+Entries are appended for:
+
+- the current reading, every **10 seconds**
+- an excursion opening or clearing, the moment it happens
+- shipment creation, edits and handoff
+
+Each entry commits to `sequence + event + timestamp + detail + prevHash` under **SHA-256**,
+and carries the previous entry's digest. `verifyChain` recomputes every digest and checks
+every link, so editing a stored entry surfaces as **"Chain broken at entry #N"** rather
+than passing silently. The SHA-256 implementation is verified against the FIPS 180-4
+vectors and cross-checked against `node:crypto` in `src/lib/hash.test.ts`.
+
+The chain retains the most recent 250 entries.
+
+## What persists
+
+Stored in `localStorage`, and restored on load:
+
+| Key                        | Contents                                        |
+| -------------------------- | ----------------------------------------------- |
+| `vault:fieldLog`           | The shipment record                             |
+| `vault:ledger`             | The hash chain                                  |
+| `vault:notificationsSeen`  | Highest notification sequence already read      |
+| `vault:theme`              | `dark` / `light`                                |
+
+The chart window is **live only** -- it is rebuilt each session and is not persisted.
+
+Stored values are treated as untrusted: `normalizeFieldLog` and `parseChain` coerce or
+discard anything malformed, and an `ErrorBoundary` offers a "clear local data" recovery
+path if a render still fails.
 
 ## Architecture
 
 ```
 src/
-  App.tsx                  App shell: SaaS header, command palette, help dialog, layout + theme
-  main.tsx                 Router setup
-  styles.css               Tailwind v4 + Vault theme tokens (light/dark) + reusable classes
-  context/ColdChainContext Cold-chain state: live temp, status, field-log meta, actions
-  pages/
-    LandingPage.tsx
-    MonitorPage.tsx
-    LedgerPage.tsx
-    ShipmentPage.tsx
-    ShipmentManagePage.tsx
-  components/
-    LoadingScreen.tsx      Premium app load-in
-    ui/                    shadcn/ui primitives (button, card, dialog, input, badge, …)
-  lib/                     Utilities (e.g. cn/class-merge)
+  main.tsx                 Router + error boundary
+  App.tsx                  Shell: header, command palette, help, notifications, theme
+  styles.css               Tailwind v4 + the Vault token palette (light/dark)
+  context/
+    ColdChainContext.tsx   Simulation loop, ledger appends, shipment state, persistence
+  lib/
+    hash.ts                SHA-256
+    ledger.ts              Append-only chain + verification
+    chart.ts               Domain, geometry, status
+    simulation.ts          Cadence, pure transforms, time formatting
+    shipment.ts            Record creation, normalisation, validation, route parsing
+    csv.ts                 RFC 4180 writing + a download that survives Firefox
+    motion.ts              prefers-reduced-motion
+  hooks/useToast.ts
+  components/              ErrorBoundary, ConfirmDialog, LoadingScreen, ui/ primitives
+  pages/                   Landing, Monitor, Ledger, Shipment, ShipmentManage
 ```
 
-## Design language
+Logic lives in `src/lib` as pure functions, which is what the test suite covers; the
+components are rendering on top of it.
 
-- Calm, confident and readable — not flashy. No rotating orbits or hype; clarity first.
-- **Readable typography throughout**: no minuscule 7px labels; micro-labels are 10px+, body/cards 12–16px, headings large but restrained.
-- Consistent `--teal` / `--safe` color tokens that flip cleanly between light and dark.
-- All controls are real components (Buttons, Cards, Badges, Dialogs) — nothing hand-rolled or amateur.
+## Design
 
-## What was implemented recently
+Two surfaces (`raised`, `sunken`) over one page background, one line colour, three text
+weights, one brand accent and three status hues -- defined once as CSS custom properties in
+`styles.css` and exposed to Tailwind through `@theme inline`. Components use `bg-raised`,
+`text-ink-muted`, `border-line` and so on, so light and dark are defined in one place
+rather than re-guessed per element.
 
-- **Production SaaS header** — sticky blurred bar with brand mark + PROTOTYPE pill, centered segmented pill nav, search / `⌘K` command palette, live-status chip, theme + notification + help group, account block, and a dedicated mobile nav row.
-- **Premium loading screen** — animated mark, shimmer + spring, seamless hand-off into the app in both themes.
-- **Readable, user-friendly pages** — landing, monitor, ledger and shipment overview rebuilt as production SaaS layouts instead of floating amateur cards.
-- **Functional interactivity** — Shipment page is fully CRUD via the Manage workspace (copy / handoff / new shipment, persisted), the ledger opens a full trail dialog with search + CSV export, and the monitor chart is interactive.
-- **App-wide typography scale-up** — bumped every font size and icon by a consistent factor; the smallest visible text is now a legible 10px with no clipping or overflow.
-- **Layout hygiene** — removed dead space inside the shipment FIELD LOG card so the two-column layout is clean and balanced.
+Sans (Geist) is the UI face. Mono (Geist Mono) is reserved for machine values -- hashes,
+sequence numbers, timestamps, identifiers and numeric readouts. Numeric readouts use
+tabular figures so they do not jitter as digits change.
+
+## Known limitations
+
+- The simulation is a random walk, not a sensor feed.
+- The operator shown in the header is demo data; there is no authentication.
+- The ledger is per-browser. It is not shared, synced or independently notarised, so it
+  proves that *this browser's* stored chain is internally consistent -- not that a third
+  party could not have replaced the whole chain.

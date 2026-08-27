@@ -150,7 +150,7 @@ function HelpDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open
             <h3 className="text-[13px] font-semibold text-ink">The simulation</h3>
             <p className="mt-1.5 text-[13.5px] leading-relaxed text-ink-muted">
               A temperature is generated every 2 seconds inside the {SAFE_MIN_C}–{SAFE_MAX_C} °C
-              corridor, with one degree of headroom either side so excursions can be exercised.
+              corridor, with 0.5 °C of headroom either side so excursions can be exercised.
               Status flips to <span className="font-medium text-ink">EXCURSION</span> the moment a
               reading leaves the corridor.
             </p>
