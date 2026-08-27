@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Pause, Play } from "lucide-react";
+import { Link } from "react-router-dom";
+import { ChevronRight, Pause, Play, ShieldAlert } from "lucide-react";
 import { useColdChain } from "@/context/ColdChainContext";
 import { Button } from "@/components/ui/button";
 import {
@@ -40,6 +41,7 @@ export default function MonitorPage() {
     chartPath,
     lastSyncAt,
     secondsUntilLedgerAppend,
+    investigation,
   } = useColdChain();
   const [hoveredId, setHoveredId] = useState<number | null>(null);
 
@@ -67,6 +69,23 @@ export default function MonitorPage() {
           Last sync {lastSyncAt ? formatClock(lastSyncAt) : "—"}
         </p>
       </header>
+
+      {investigation.status === "UNDER_INVESTIGATION" && investigation.openEntry && (
+        <Link
+          to="/ledger"
+          className="flex items-start gap-3 rounded-lg border border-warning/40 bg-warning-soft p-3.5 transition-colors hover:border-warning/60"
+        >
+          <ShieldAlert size={17} className="mt-px shrink-0 text-warning" aria-hidden="true" />
+          <div className="min-w-0 flex-1">
+            <p className="text-[13.5px] font-medium text-ink">Under investigation</p>
+            <p className="mt-0.5 text-[13px] text-ink-muted">
+              Opened {formatClock(investigation.openEntry.at)} — the ledger will not read as
+              Cleared until this is resolved. View on the Ledger to resolve.
+            </p>
+          </div>
+          <ChevronRight size={16} className="mt-0.5 shrink-0 text-ink-subtle" aria-hidden="true" />
+        </Link>
+      )}
 
       <div className="grid gap-4 lg:grid-cols-[300px_1fr] lg:items-start">
         {/* Gauge */}
