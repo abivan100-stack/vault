@@ -17,28 +17,50 @@
 :root {
   color-scheme: light;
 
-  --surface: #f7f7f5;
+  /* Surfaces. Light mode earns its depth from luminance steps: the page is
+     warm paper, cards are true white and sit above it, wells sit below. Each
+     step is ~1.15:1 against its neighbour — enough to read as a layer without
+     the page turning grey. */
+  --surface: #f0eee8;
   --raised: #ffffff;
-  --sunken: #f0f0ec;
+  --sunken: #e4e1d8;
 
-  --line: #e3e3dd;
-  --line-strong: #cdcec6;
+  --line: #d9d5c9;
+  --line-strong: #b6b1a2;
 
-  --ink: #1a1c1a;
-  --ink-muted: #5e635e;
-  --ink-subtle: #8b908a;
+  /* Ink. Every weight clears WCAG AA (4.5:1) against both --surface and
+     --raised, so secondary text stays information rather than texture. */
+  --ink: #1c1e1b;
+  --ink-muted: #4d5250;
+  --ink-subtle: #676b65;
 
-  --brand: #0f6b64;
-  --brand-hover: #0b5450;
-  --brand-ink: #0d5d57;
-  --brand-soft: #e4f0ee;
+  /* Brand. A ramp rather than one value doing four jobs: a fill, its hover, a
+     text-safe shade, a tint, and a border for that tint. */
+  --brand: #0d6d63;
+  --brand-hover: #0a544c;
+  --brand-ink: #0a5a52;
+  --brand-soft: #dcece9;
+  --brand-line: #a8cdc7;
 
-  --success: #2f7d4f;
-  --success-soft: #e5f1e8;
-  --warning: #9a5f16;
-  --warning-soft: #f8eeda;
-  --danger: #a13a2e;
-  --danger-soft: #f7e7e4;
+  /* Status. Text shades clear AA on their own soft background; the -line
+     token lets a soft chip carry an edge instead of floating. */
+  --success: #1f6b40;
+  --success-soft: #dcecdf;
+  --success-line: #a9cdb2;
+  --warning: #8a4f0a;
+  --warning-soft: #f6e8cc;
+  --warning-line: #dcbe86;
+  --danger: #98332a;
+  --danger-soft: #f6e0dc;
+  --danger-line: #e0aca4;
+
+  /* Elevation. Light-mode only — dark mode already separates layers by
+     luminance, and shadows on near-black surfaces read as mud. */
+  --elevation-1: 0 1px 2px rgba(28, 30, 27, 0.05), 0 1px 1px rgba(28, 30, 27, 0.03);
+  --elevation-2:
+    0 1px 2px rgba(28, 30, 27, 0.05), 0 4px 10px -2px rgba(28, 30, 27, 0.07);
+  --elevation-3:
+    0 2px 4px rgba(28, 30, 27, 0.06), 0 14px 28px -8px rgba(28, 30, 27, 0.12);
 
   --radius: 0.5rem;
 }
@@ -68,6 +90,17 @@
   --warning-soft: #33260f;
   --danger: #e08375;
   --danger-soft: #351c19;
+
+  /* New tokens, neutralised: dark mode is deliberately unchanged. Soft chips
+     keep their borderless look and layers keep their luminance-only depth. */
+  --brand-line: transparent;
+  --success-line: transparent;
+  --warning-line: transparent;
+  --danger-line: transparent;
+
+  --elevation-1: none;
+  --elevation-2: none;
+  --elevation-3: none;
 }
 
 /* shadcn/ui contract — mapped onto the Vault palette so the primitives inherit
@@ -117,13 +150,21 @@
   --color-brand-hover: var(--brand-hover);
   --color-brand-ink: var(--brand-ink);
   --color-brand-soft: var(--brand-soft);
+  --color-brand-line: var(--brand-line);
 
   --color-success: var(--success);
   --color-success-soft: var(--success-soft);
+  --color-success-line: var(--success-line);
   --color-warning: var(--warning);
   --color-warning-soft: var(--warning-soft);
+  --color-warning-line: var(--warning-line);
   --color-danger: var(--danger);
   --color-danger-soft: var(--danger-soft);
+  --color-danger-line: var(--danger-line);
+
+  --shadow-e1: var(--elevation-1);
+  --shadow-e2: var(--elevation-2);
+  --shadow-e3: var(--elevation-3);
 
   --color-background: var(--background);
   --color-foreground: var(--foreground);
