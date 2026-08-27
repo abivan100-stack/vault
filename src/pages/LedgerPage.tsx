@@ -39,6 +39,11 @@ import {
   type LedgerEventType,
   type ResolutionReason,
 } from "@/lib/ledger";
+import {
+  SEGMENT_INDICATOR,
+  SEGMENT_MOVES,
+  useSegmentedIndicator,
+} from "@/hooks/useSegmentedIndicator";
 import { shortHash } from "@/lib/hash";
 import { formatClock, formatIsoDate } from "@/lib/simulation";
 import { downloadCsv, toCsv } from "@/lib/csv";
@@ -109,6 +114,8 @@ export default function LedgerPage() {
     useColdChain();
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<FilterKey>("all");
+  const filterSegmentsRef = useRef<HTMLDivElement>(null);
+  const filterSegments = useSegmentedIndicator(filterSegmentsRef, filter);
   const [copiedHash, setCopiedHash] = useState<string | null>(null);
   const [fullOpen, setFullOpen] = useState(false);
   const [resolveOpen, setResolveOpen] = useState(false);
@@ -291,17 +298,25 @@ export default function LedgerPage() {
         </div>
 
         <div className="max-w-full overflow-x-auto rounded-lg border border-line bg-sunken p-0.5">
-          <div className="flex h-8 w-max items-center gap-0.5">
+          {/* The row scrolls once the filters overflow, so the indicator is
+              measured against the row rather than the clipping container —
+              against the container it would drift as soon as you scrolled. */}
+          <div ref={filterSegmentsRef} className="relative flex h-8 w-max items-center gap-0.5">
+            <span
+              aria-hidden="true"
+              className={`${SEGMENT_INDICATOR} ${filterSegments.moves ? SEGMENT_MOVES : ""}`}
+              style={filterSegments.indicatorStyle}
+            />
             {FILTERS.map((entry) => (
               <button
                 key={entry.key}
                 type="button"
+                data-segment={entry.key}
                 onClick={() => setFilter(entry.key)}
                 aria-pressed={filter === entry.key}
-                className={`h-8 shrink-0 whitespace-nowrap rounded-md px-3 text-[13px] font-medium transition-colors ${
-                  filter === entry.key
-                    ? "bg-raised text-ink ring-1 ring-line"
-                    : "text-ink-muted hover:text-ink"
+                // The active pill is the sliding indicator behind this button.
+                className={`relative z-10 h-8 shrink-0 whitespace-nowrap rounded-md px-3 text-[13px] font-medium transition-colors ${
+                  filter === entry.key ? "text-ink" : "text-ink-muted hover:text-ink"
                 }`}
               >
                 {entry.label}

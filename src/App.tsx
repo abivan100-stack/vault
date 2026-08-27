@@ -28,6 +28,11 @@ import {
 } from "@/components/ui/dialog";
 import LoadingScreen from "@/components/LoadingScreen";
 import { useAnime } from "@/hooks/useAnime";
+import {
+  SEGMENT_INDICATOR,
+  SEGMENT_MOVES,
+  useSegmentedIndicator,
+} from "@/hooks/useSegmentedIndicator";
 import { formatClock } from "@/lib/simulation";
 import { formatEventLabel, type LedgerEntry } from "@/lib/ledger";
 import { SAFE_MAX_C, SAFE_MIN_C } from "@/lib/chart";
@@ -51,20 +56,19 @@ const NAV_ITEMS = [
 
 const PAGE_CONTAINER = "mx-auto w-full max-w-[1180px] px-5 sm:px-8";
 
+// The active item's pill is drawn by the sliding indicator behind it, not by
+// the item itself — otherwise two pills would exist during the transition.
+// `relative z-10` keeps the label above that indicator.
 function navLinkClass({ isActive }: { isActive: boolean }): string {
   const base =
-    "inline-flex h-8 items-center gap-2 rounded-md px-3.5 text-[13.5px] font-medium transition-colors";
-  return isActive
-    ? `${base} bg-raised text-ink ring-1 ring-line`
-    : `${base} text-ink-muted hover:text-ink`;
+    "relative z-10 inline-flex h-8 items-center gap-2 rounded-md px-3.5 text-[13.5px] font-medium transition-colors";
+  return isActive ? `${base} text-ink` : `${base} text-ink-muted hover:text-ink`;
 }
 
 function mobileNavLinkClass({ isActive }: { isActive: boolean }): string {
   const base =
-    "inline-flex h-8 flex-1 items-center justify-center gap-2 rounded-md text-[13.5px] font-medium transition-colors";
-  return isActive
-    ? `${base} bg-raised text-ink ring-1 ring-line`
-    : `${base} text-ink-muted hover:text-ink`;
+    "relative z-10 inline-flex h-8 flex-1 items-center justify-center gap-2 rounded-md text-[13.5px] font-medium transition-colors";
+  return isActive ? `${base} text-ink` : `${base} text-ink-muted hover:text-ink`;
 }
 
 function notificationIcon(event: LedgerEntry["event"]) {
@@ -306,6 +310,16 @@ function Header({ isDark, onToggleTheme }: { isDark: boolean; onToggleTheme: () 
   const [commandOpen, setCommandOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
 
+  // Prefix match, mirroring NavLink's own default: /shipment/manage keeps the
+  // Shipment segment active. The landing route matches nothing, and the
+  // indicator hides rather than parking on an arbitrary item.
+  const { pathname } = useLocation();
+  const activeNav = NAV_ITEMS.find((item) => pathname.startsWith(item.to))?.to ?? "";
+  const desktopNavRef = useRef<HTMLElement>(null);
+  const mobileNavRef = useRef<HTMLElement>(null);
+  const desktopNav = useSegmentedIndicator(desktopNavRef, activeNav);
+  const mobileNav = useSegmentedIndicator(mobileNavRef, activeNav);
+
   // A single owner for ⌘K, so it can never stack a second dialog on top of an
   // open one. `event.key` is optional on some IME/Android events — guard it.
   useEffect(() => {
@@ -353,11 +367,17 @@ function Header({ isDark, onToggleTheme }: { isDark: boolean; onToggleTheme: () 
 
           {/* Primary nav */}
           <nav
-            className="hidden h-9 items-center gap-0.5 justify-self-center rounded-lg border border-line bg-sunken p-0.5 md:flex"
+            ref={desktopNavRef}
+            className="relative hidden h-9 items-center gap-0.5 justify-self-center rounded-lg border border-line bg-sunken p-0.5 md:flex"
             aria-label="Primary"
           >
+            <span
+              aria-hidden="true"
+              className={`${SEGMENT_INDICATOR} ${desktopNav.moves ? SEGMENT_MOVES : ""}`}
+              style={desktopNav.indicatorStyle}
+            />
             {NAV_ITEMS.map((item) => (
-              <NavLink key={item.to} to={item.to} className={navLinkClass}>
+              <NavLink key={item.to} to={item.to} data-segment={item.to} className={navLinkClass}>
                 <item.icon size={15} aria-hidden="true" />
                 {item.label}
               </NavLink>
@@ -459,9 +479,18 @@ function Header({ isDark, onToggleTheme }: { isDark: boolean; onToggleTheme: () 
 
       {/* Mobile nav */}
       <div className="border-t border-line bg-surface md:hidden">
-        <nav className={`${PAGE_CONTAINER} flex gap-1 py-2`} aria-label="Primary, mobile">
+        <nav
+          ref={mobileNavRef}
+          className={`${PAGE_CONTAINER} relative flex gap-1 py-2`}
+          aria-label="Primary, mobile"
+        >
+          <span
+            aria-hidden="true"
+            className={`${SEGMENT_INDICATOR} ${mobileNav.moves ? SEGMENT_MOVES : ""}`}
+            style={mobileNav.indicatorStyle}
+          />
           {NAV_ITEMS.map((item) => (
-            <NavLink key={item.to} to={item.to} className={mobileNavLinkClass}>
+            <NavLink key={item.to} to={item.to} data-segment={item.to} className={mobileNavLinkClass}>
               <item.icon size={15} aria-hidden="true" />
               {item.label}
             </NavLink>

@@ -389,13 +389,26 @@
   stroke-width: 3;
 }
 
+/* A breach must survive being read without colour. A safe reading is a light
+   hollow ring; an excursion is filled and carries a heavier stroke, so the
+   corridor break is visible in greyscale and to a red/green colourblind
+   operator. Hue alone would hide it on the one display that matters most. */
 .chart-point.excursion {
+  fill: var(--warning);
   stroke: var(--warning);
+  stroke-width: 2.5;
 }
 
 .chart-point.excursion.active,
 .chart-point.excursion.hovered {
   fill: var(--warning);
+}
+
+/* Keep the hover ring: the rule above would otherwise win on source order and
+   drop the raised halo that marks which point the cursor owns. */
+.chart-point.excursion.hovered {
+  stroke: var(--raised);
+  stroke-width: 3;
 }
 
 .chart-cursor {
