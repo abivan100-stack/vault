@@ -77,7 +77,7 @@
 
   --ink: #e9ebe8;
   --ink-muted: #9ba29d;
-  --ink-subtle: #6f766f;
+  --ink-subtle: #858c85;
 
   --brand: #4bb3a8;
   --brand-hover: #5cc4b8;
@@ -201,39 +201,53 @@
     @apply font-sans;
     -webkit-text-size-adjust: 100%;
 
-    /* The scrollbar is the last piece of browser chrome on the page. Thin, on
-       a transparent track and coloured from the palette, it reads as an edge
-       of the surface rather than a strip bolted to the side of it. Both
-       properties inherit, so this also covers the command palette, the
-       notification panel and the ledger's scroll regions. */
+    /* The scrollbar is the last piece of browser chrome on the page. Thin
+       everywhere, but the palette colour only applies in light mode (see the
+       .dark override below) — dark mode keeps the browser's own dark bar,
+       unchanged from before this refresh. Both properties inherit, so this
+       also covers the command palette, the notification panel and the
+       ledger's scroll regions. */
     scrollbar-width: thin;
     scrollbar-color: var(--line-strong) transparent;
   }
 
+  /* Dark mode must render exactly as it did before this refresh: fall back to
+     the browser default track/thumb. color-scheme: dark is already set on
+     .dark, so that default renders as the browser's own dark-mode scrollbar.
+     .dark is applied on the root element itself (not an ancestor), so this
+     targets it directly rather than via the &:is(.dark *) descendant variant. */
+  .dark {
+    scrollbar-color: auto;
+  }
+
   /* Safari and older WebKit do not support scrollbar-color. Chrome ignores
      these pseudo-elements as soon as scrollbar-color is set, so gating them on
-     @supports keeps the two approaches from fighting over the same bar. */
+     @supports keeps the two approaches from fighting over the same bar. Scoped
+     to light mode only, to match the scrollbar-color treatment above. */
   @supports not (scrollbar-color: auto) {
-    ::-webkit-scrollbar {
+    /* :not(.dark, .dark *) excludes both the root element when it carries
+       .dark and every descendant of it, since .dark sits on the root itself
+       rather than a wrapping ancestor. */
+    :not(.dark, .dark *)::-webkit-scrollbar {
       width: 10px;
       height: 10px;
     }
 
-    ::-webkit-scrollbar-track,
-    ::-webkit-scrollbar-corner {
+    :not(.dark, .dark *)::-webkit-scrollbar-track,
+    :not(.dark, .dark *)::-webkit-scrollbar-corner {
       background: transparent;
     }
 
     /* The transparent border plus content-box clipping insets the thumb, so it
        floats in the gutter instead of filling it wall to wall. */
-    ::-webkit-scrollbar-thumb {
+    :not(.dark, .dark *)::-webkit-scrollbar-thumb {
       background-color: var(--line-strong);
       background-clip: content-box;
       border: 2px solid transparent;
       border-radius: 999px;
     }
 
-    ::-webkit-scrollbar-thumb:hover {
+    :not(.dark, .dark *)::-webkit-scrollbar-thumb:hover {
       background-color: var(--ink-subtle);
     }
   }
