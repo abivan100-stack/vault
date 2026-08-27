@@ -3,9 +3,14 @@ import {
   GENESIS_HASH,
   MAX_LEDGER_ENTRIES,
   appendEntry,
+  coveredExcursionSequences,
+  deriveInvestigationState,
   entryDigest,
   formatEventLabel,
+  hasInvestigationEvidence,
+  isLedgerEntry,
   parseChain,
+  resolutionReasonLabel,
   verifyChain,
   type LedgerEntry,
 } from "./ledger";
@@ -250,5 +255,118 @@ describe("formatEventLabel", () => {
   it("replaces every underscore, not just the first", () => {
     expect(formatEventLabel("TEMPERATURE_READING")).toBe("TEMPERATURE READING");
     expect(formatEventLabel("A_B_C_D")).toBe("A B C D");
+  });
+});
+
+describe("deriveInvestigationState", () => {
+  it("reports Cleared for a chain with no investigation", () => {
+    const chain = buildChain(3);
+    expect(deriveInvestigationState(chain)).toEqual({ status: "CLEARED", openEntry: null });
+  });
+
+  it("reports Under investigation once an INVESTIGATION_OPEN is appended", () => {
+    let chain = buildChain(1);
+    chain = appendEntry(chain, "EXCURSION_OPEN", "9.0 °C — left safe corridor", at(10));
+    chain = appendEntry(chain, "INVESTIGATION_OPEN", "Investigation opened", at(10));
+
+    const state = deriveInvestigationState(chain);
+    expect(state.status).toBe("UNDER_INVESTIGATION");
+    expect(state.openEntry?.event).toBe("INVESTIGATION_OPEN");
+  });
+
+  it("reports Cleared again once resolved", () => {
+    let chain = buildChain(1);
+    chain = appendEntry(chain, "EXCURSION_OPEN", "9.0 °C", at(10));
+    chain = appendEntry(chain, "INVESTIGATION_OPEN", "Investigation opened", at(10));
+    chain = appendEntry(chain, "INVESTIGATION_RESOLVED", "Sensor fault — fixed", at(20));
+
+    expect(deriveInvestigationState(chain)).toEqual({ status: "CLEARED", openEntry: null });
+  });
+
+  it("does not let an unresolved Investigation carry over a new shipment", () => {
+    let chain = buildChain(1);
+    chain = appendEntry(chain, "EXCURSION_OPEN", "9.0 °C", at(10));
+    chain = appendEntry(chain, "INVESTIGATION_OPEN", "Opened", at(10));
+    chain = appendEntry(chain, "SHIPMENT_CREATE", "New box / new batch", at(20));
+
+    expect(deriveInvestigationState(chain)).toEqual({ status: "CLEARED", openEntry: null });
+  });
+
+  it("tracks only the newest open/resolved pair across repeated cycles", () => {
+    let chain = buildChain(1);
+    chain = appendEntry(chain, "INVESTIGATION_OPEN", "First", at(1));
+    chain = appendEntry(chain, "INVESTIGATION_RESOLVED", "First resolved", at(2));
+    chain = appendEntry(chain, "INVESTIGATION_OPEN", "Second", at(3));
+
+    const state = deriveInvestigationState(chain);
+    expect(state.status).toBe("UNDER_INVESTIGATION");
+    expect(state.openEntry?.detail).toBe("Second");
+  });
+});
+
+describe("coveredExcursionSequences", () => {
+  it("collects every EXCURSION_OPEN at or after the given sequence", () => {
+    let chain = buildChain(1); // sequence 1
+    chain = appendEntry(chain, "EXCURSION_OPEN", "9.0 °C", at(10)); // 2 — triggers
+    chain = appendEntry(chain, "INVESTIGATION_OPEN", "Opened", at(10)); // 3
+    chain = appendEntry(chain, "EXCURSION_CLEAR", "4.8 °C", at(20)); // 4
+    chain = appendEntry(chain, "EXCURSION_OPEN", "9.2 °C", at(30)); // 5 — absorbed
+
+    expect(coveredExcursionSequences(chain, 2)).toEqual([2, 5]);
+  });
+
+  it("returns an empty list when nothing qualifies", () => {
+    const chain = buildChain(3);
+    expect(coveredExcursionSequences(chain, 1)).toEqual([]);
+  });
+});
+
+describe("hasInvestigationEvidence", () => {
+  it("is true when a SHIPMENT_CREATE is present", () => {
+    const chain = appendEntry([], "SHIPMENT_CREATE", "Corridor opened", T0);
+    expect(hasInvestigationEvidence(chain)).toBe(true);
+  });
+
+  it("is true when an INVESTIGATION_OPEN or INVESTIGATION_RESOLVED is present", () => {
+    let chain = appendEntry([], "TEMPERATURE_READING", "4.8 °C", T0);
+    expect(hasInvestigationEvidence(chain)).toBe(false);
+    chain = appendEntry(chain, "INVESTIGATION_OPEN", "Opened", at(1));
+    expect(hasInvestigationEvidence(chain)).toBe(true);
+  });
+
+  it("is false for a window with only readings and excursions", () => {
+    let chain = appendEntry([], "TEMPERATURE_READING", "4.8 °C", T0);
+    chain = appendEntry(chain, "EXCURSION_OPEN", "9.0 °C", at(1));
+    chain = appendEntry(chain, "EXCURSION_CLEAR", "4.8 °C", at(2));
+    expect(hasInvestigationEvidence(chain)).toBe(false);
+  });
+
+  it("is false for an empty chain", () => {
+    expect(hasInvestigationEvidence([])).toBe(false);
+  });
+});
+
+describe("isLedgerEntry", () => {
+  it("accepts a genuine entry", () => {
+    const [entry] = buildChain(1);
+    expect(isLedgerEntry(entry)).toBe(true);
+  });
+
+  it("rejects malformed values", () => {
+    const [genuine] = buildChain(1);
+    expect(isLedgerEntry(null)).toBe(false);
+    expect(isLedgerEntry("nope")).toBe(false);
+    expect(isLedgerEntry({ ...genuine, hash: "abc" })).toBe(false);
+    expect(isLedgerEntry({ ...genuine, event: "NOT_A_REAL_EVENT" })).toBe(false);
+    expect(isLedgerEntry({ ...genuine, sequence: 1.5 })).toBe(false);
+  });
+});
+
+describe("resolutionReasonLabel", () => {
+  it("maps every reason code to its label", () => {
+    expect(resolutionReasonLabel("SENSOR_FAULT")).toBe("Sensor fault");
+    expect(resolutionReasonLabel("CARRIER_DELAY")).toBe("Carrier delay");
+    expect(resolutionReasonLabel("CONFIRMED_LOSS")).toBe("Confirmed loss");
+    expect(resolutionReasonLabel("OTHER")).toBe("Other");
   });
 });

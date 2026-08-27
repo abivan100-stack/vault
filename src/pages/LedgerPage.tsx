@@ -1,10 +1,20 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Check, Copy, Download, Search, ShieldAlert, ShieldCheck } from "lucide-react";
+import {
+  Check,
+  ClipboardCheck,
+  ClipboardList,
+  Copy,
+  Download,
+  Search,
+  ShieldAlert,
+  ShieldCheck,
+} from "lucide-react";
 import { useColdChain } from "@/context/ColdChainContext";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import StatusPill from "@/components/StatusPill";
+import { Label } from "@/components/ui/label";
 import {
   Table,
   TableBody,
@@ -21,21 +31,29 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  RESOLUTION_REASONS,
+  coveredExcursionSequences,
   describeVerification,
   formatEventLabel,
   type LedgerEntry,
   type LedgerEventType,
+  type ResolutionReason,
 } from "@/lib/ledger";
 import { shortHash } from "@/lib/hash";
 import { formatClock, formatIsoDate } from "@/lib/simulation";
 import { downloadCsv, toCsv } from "@/lib/csv";
 
-type FilterKey = "all" | "readings" | "excursions" | "shipment";
+type FilterKey = "all" | "readings" | "excursions" | "investigations" | "shipment";
 
 const FILTERS: { key: FilterKey; label: string; events: readonly LedgerEventType[] | null }[] = [
   { key: "all", label: "All", events: null },
   { key: "readings", label: "Readings", events: ["TEMPERATURE_READING"] },
   { key: "excursions", label: "Excursions", events: ["EXCURSION_OPEN", "EXCURSION_CLEAR"] },
+  {
+    key: "investigations",
+    label: "Investigations",
+    events: ["INVESTIGATION_OPEN", "INVESTIGATION_RESOLVED"],
+  },
   {
     key: "shipment",
     label: "Shipment",
@@ -43,8 +61,17 @@ const FILTERS: { key: FilterKey; label: string; events: readonly LedgerEventType
   },
 ];
 
-function eventTone(event: LedgerEventType): "warning" | "brand" | "neutral" {
-  if (event === "EXCURSION_OPEN") return "warning";
+const SELECT_CLASS =
+  "h-8 w-full min-w-0 rounded-lg border border-input bg-raised px-2.5 text-[13.5px] text-ink transition-colors outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-transparent";
+
+const TEXTAREA_CLASS =
+  "w-full min-w-0 rounded-lg border border-input bg-raised px-2.5 py-1.5 text-[13.5px] text-ink transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-transparent";
+
+function eventTone(
+  event: LedgerEventType
+): "success" | "warning" | "brand" | "neutral" {
+  if (event === "EXCURSION_OPEN" || event === "INVESTIGATION_OPEN") return "warning";
+  if (event === "INVESTIGATION_RESOLVED") return "success";
   if (event === "HANDOFF_INIT" || event === "SHIPMENT_CREATE") return "brand";
   return "neutral";
 }
@@ -78,11 +105,15 @@ function HashButton({
 }
 
 export default function LedgerPage() {
-  const { ledger, chainVerification, discardedEntryCount } = useColdChain();
+  const { ledger, chainVerification, discardedEntryCount, investigation, resolveInvestigation } =
+    useColdChain();
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<FilterKey>("all");
   const [copiedHash, setCopiedHash] = useState<string | null>(null);
   const [fullOpen, setFullOpen] = useState(false);
+  const [resolveOpen, setResolveOpen] = useState(false);
+  const [resolveReason, setResolveReason] = useState<ResolutionReason | "">("");
+  const [resolveNote, setResolveNote] = useState("");
   const copyTimerRef = useRef<number | null>(null);
 
   useEffect(
@@ -141,6 +172,22 @@ export default function LedgerPage() {
   const rows: LedgerEntry[] = filtered.slice(0, 12);
   const isTrustworthy = chainVerification.intact && discardedEntryCount === 0;
 
+  const coveredExcursions = investigation.openEntry
+    ? coveredExcursionSequences(ledger, investigation.openEntry.sequence - 1)
+    : [];
+
+  const openResolveDialog = () => {
+    setResolveReason("");
+    setResolveNote("");
+    setResolveOpen(true);
+  };
+
+  const handleResolve = () => {
+    if (!resolveReason || !resolveNote.trim()) return;
+    resolveInvestigation(resolveReason, resolveNote);
+    setResolveOpen(false);
+  };
+
   return (
     <div className="space-y-6">
       <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
@@ -193,6 +240,40 @@ export default function LedgerPage() {
         </div>
       </div>
 
+      {/* Investigation status — independent of chain verification above. A
+          chain can be Intact and Under Investigation at once, or Cleared and
+          broken: one is a cryptographic fact, the other a workflow fact. */}
+      <div
+        className={`flex items-start gap-3 rounded-lg border p-3.5 shadow-e1 ${
+          investigation.status === "CLEARED"
+            ? "border-line bg-raised"
+            : "border-warning-line bg-warning-soft dark:border-warning/40"
+        }`}
+      >
+        {investigation.status === "CLEARED" ? (
+          <ClipboardCheck size={17} className="mt-px shrink-0 text-success" aria-hidden="true" />
+        ) : (
+          <ClipboardList size={17} className="mt-px shrink-0 text-warning" aria-hidden="true" />
+        )}
+        <div className="min-w-0 flex-1">
+          <p className="text-[13.5px] font-medium text-ink">
+            {investigation.status === "CLEARED" ? "Cleared" : "Under investigation"}
+          </p>
+          <p className="mt-0.5 text-[13px] text-ink-muted">
+            {investigation.status === "CLEARED"
+              ? "No open investigation."
+              : `Opened ${formatClock(investigation.openEntry!.at)} on ${formatIsoDate(investigation.openEntry!.at)} — ${
+                  coveredExcursions.length
+                } ${coveredExcursions.length === 1 ? "excursion" : "excursions"} absorbed so far. Resolving requires a reason and a note.`}
+          </p>
+        </div>
+        {investigation.status === "UNDER_INVESTIGATION" && (
+          <Button onClick={openResolveDialog} className="h-8 shrink-0 text-[13px]">
+            Resolve investigation
+          </Button>
+        )}
+      </div>
+
       <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
         <div className="relative max-w-sm flex-1">
           <Search
@@ -209,22 +290,24 @@ export default function LedgerPage() {
           />
         </div>
 
-        <div className="flex h-9 items-center gap-0.5 rounded-lg border border-line bg-sunken p-0.5">
-          {FILTERS.map((entry) => (
-            <button
-              key={entry.key}
-              type="button"
-              onClick={() => setFilter(entry.key)}
-              aria-pressed={filter === entry.key}
-              className={`h-8 rounded-md px-3 text-[13px] font-medium transition-colors ${
-                filter === entry.key
-                  ? "bg-raised text-ink ring-1 ring-line"
-                  : "text-ink-muted hover:text-ink"
-              }`}
-            >
-              {entry.label}
-            </button>
-          ))}
+        <div className="max-w-full overflow-x-auto rounded-lg border border-line bg-sunken p-0.5">
+          <div className="flex h-8 w-max items-center gap-0.5">
+            {FILTERS.map((entry) => (
+              <button
+                key={entry.key}
+                type="button"
+                onClick={() => setFilter(entry.key)}
+                aria-pressed={filter === entry.key}
+                className={`h-8 shrink-0 whitespace-nowrap rounded-md px-3 text-[13px] font-medium transition-colors ${
+                  filter === entry.key
+                    ? "bg-raised text-ink ring-1 ring-line"
+                    : "text-ink-muted hover:text-ink"
+                }`}
+              >
+                {entry.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -349,6 +432,69 @@ export default function LedgerPage() {
                 Export CSV
               </Button>
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={resolveOpen} onOpenChange={setResolveOpen}>
+        <DialogContent className="max-w-[440px] gap-0 overflow-hidden p-0">
+          <DialogHeader className="border-b border-line p-5">
+            <DialogTitle className="text-[15px] font-semibold tracking-[-0.01em]">
+              Resolve investigation
+            </DialogTitle>
+            <DialogDescription className="text-[13px] text-ink-muted">
+              {coveredExcursions.length > 0
+                ? `Covers excursion${coveredExcursions.length > 1 ? "s" : ""} ${coveredExcursions
+                    .map((sequence) => `#${sequence}`)
+                    .join(", ")}. This is appended to the ledger and cannot be edited afterward.`
+                : "This is appended to the ledger and cannot be edited afterward."}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 p-5">
+            <div className="space-y-1.5">
+              <Label htmlFor="resolve-reason">Reason</Label>
+              <select
+                id="resolve-reason"
+                value={resolveReason}
+                onChange={(event) => setResolveReason(event.target.value as ResolutionReason)}
+                className={SELECT_CLASS}
+              >
+                <option value="" disabled>
+                  Select a reason…
+                </option>
+                {RESOLUTION_REASONS.map((reason) => (
+                  <option key={reason.value} value={reason.value}>
+                    {reason.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label htmlFor="resolve-note">Note</Label>
+              <textarea
+                id="resolve-note"
+                value={resolveNote}
+                onChange={(event) => setResolveNote(event.target.value)}
+                placeholder="What did you find, and what was done about it?"
+                rows={4}
+                className={TEXTAREA_CLASS}
+              />
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end gap-2 border-t border-line p-4">
+            <Button variant="outline" onClick={() => setResolveOpen(false)} className="h-9 text-sm">
+              Cancel
+            </Button>
+            <Button
+              onClick={handleResolve}
+              disabled={!resolveReason || !resolveNote.trim()}
+              className="h-9 text-sm"
+            >
+              Resolve
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

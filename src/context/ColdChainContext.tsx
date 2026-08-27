@@ -8,15 +8,22 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { buildChartPath, statusFor, type Status } from "@/lib/chart";
+import { buildChartPath, clampToCorridor, statusFor, type Status } from "@/lib/chart";
 import {
   appendEntry,
+  coveredExcursionSequences,
+  deriveInvestigationState,
+  hasInvestigationEvidence,
+  isLedgerEntry,
   parseChain,
+  resolutionReasonLabel,
   verifyChain,
   type ChainVerification,
+  type InvestigationState,
   type LedgerEntry,
   type LedgerEventType,
   type ParsedChain,
+  type ResolutionReason,
 } from "@/lib/ledger";
 import {
   boxSerial,
@@ -40,6 +47,18 @@ export type { FieldLogMeta } from "@/lib/shipment";
 const FIELD_LOG_KEY = "vault:fieldLog";
 const LEDGER_KEY = "vault:ledger";
 const NOTIFICATIONS_SEEN_KEY = "vault:notificationsSeen";
+/**
+ * Last-known Investigation status, persisted separately from the ledger.
+ *
+ * `ledger` in storage is capped at MAX_LEDGER_ENTRIES, so a long-open
+ * Investigation's anchor entry (and even the shipment's SHIPMENT_CREATE) can
+ * age out of the retained window entirely. When that happens the window has
+ * no evidence either way, and this is the only thing that remembers the
+ * shipment was still Under Investigation. It is a cache of a ledger-recorded
+ * fact, not a competing source of truth: whenever the retained window does
+ * contain evidence, that evidence wins (see hasInvestigationEvidence).
+ */
+const OPEN_INVESTIGATION_KEY = "vault:openInvestigation";
 
 const SEED_TEMPERATURE = 4.8;
 const SAMPLES_PER_LEDGER_APPEND = Math.max(1, Math.round(LEDGER_INTERVAL_MS / SAMPLE_INTERVAL_MS));
@@ -49,6 +68,8 @@ const NOTIFIABLE_EVENTS: readonly LedgerEventType[] = [
   "EXCURSION_OPEN",
   "EXCURSION_CLEAR",
   "HANDOFF_INIT",
+  "INVESTIGATION_OPEN",
+  "INVESTIGATION_RESOLVED",
 ];
 
 /** Nothing is stored under the key (or storage is unavailable). */
@@ -114,7 +135,7 @@ function seedReadings(now: Date): Reading[] {
   const readings: Reading[] = [];
   let value = SEED_TEMPERATURE;
   for (let i = READING_WINDOW - 1; i >= 0; i -= 1) {
-    value = nextTemperature(value, randomDrift());
+    value = clampToCorridor(nextTemperature(value, randomDrift()));
     readings.push({
       id: READING_WINDOW - 1 - i,
       at: new Date(now.getTime() - i * SAMPLE_INTERVAL_MS).toISOString(),
@@ -171,6 +192,9 @@ type ColdChainValue = {
   chainVerification: ChainVerification;
   /** Stored entries that were unreadable on load — non-zero means data loss. */
   discardedEntryCount: number;
+  /** Cleared vs Under Investigation — independent of chainVerification. */
+  investigation: InvestigationState;
+  resolveInvestigation: (reason: ResolutionReason, note: string) => void;
   notifications: LedgerEntry[];
   unreadNotificationCount: number;
   markNotificationsRead: () => void;
@@ -239,6 +263,43 @@ export function ColdChainProvider({ children }: { children: ReactNode }) {
   const latestValueRef = useRef(temperature);
   const statusRef = useRef<Status>(status);
   const sampleCountRef = useRef(0);
+  // Real state, not derived from `ledger` on every render: `ledger` is capped
+  // at MAX_LEDGER_ENTRIES, so an old INVESTIGATION_OPEN can slide out of the
+  // retained window while still logically open, and rescanning from scratch
+  // each render would then silently report Cleared. Instead this only
+  // transitions at the three moments that actually open, resolve, or reset
+  // an Investigation (see the effect below and createNewShipment), so it
+  // naturally carries forward across everything in between.
+  const [investigation, setInvestigation] = useState<InvestigationState>(() => {
+    const scanned = deriveInvestigationState(ledger);
+    if (hasInvestigationEvidence(ledger)) return scanned;
+    // The retained window has nothing to say about Cleared vs Under
+    // Investigation at all — fall back to the separately persisted pointer
+    // rather than defaulting to Cleared, which would silently drop a still-
+    // open Investigation the moment its evidence aged out.
+    const stored = readStorage(OPEN_INVESTIGATION_KEY);
+    if (isLedgerEntry(stored) && stored.event === "INVESTIGATION_OPEN") {
+      return { status: "UNDER_INVESTIGATION", openEntry: stored };
+    }
+    return scanned;
+  });
+
+  // Mirrors whether an Investigation is currently open, read/written
+  // synchronously inside the interval callback so a run of excursions within
+  // the same render cycle is absorbed rather than each opening its own
+  // Investigation. Seeded from `investigation` above (not a fresh
+  // `deriveInvestigationState(ledger)` scan) so it agrees with the same
+  // evidence-aged-out fallback — otherwise a reload after a long-open
+  // Investigation's anchor slid out of the window would leave this false
+  // while the UI still (correctly) shows Under Investigation, and the next
+  // excursion would open a second, unrelated Investigation.
+  const investigationOpenRef = useRef(investigation.openEntry !== null);
+  // Highest ledger sequence already accounted for by the render-time
+  // adjustment below, so it can scan forward from there rather than just the
+  // newest entry — see there for why the newest entry alone isn't enough.
+  const [lastScannedSequence, setLastScannedSequence] = useState(
+    ledger.length > 0 ? ledger[ledger.length - 1].sequence : 0,
+  );
 
   const appendLedger = useCallback((event: LedgerEventType, detail: string, at: Date) => {
     setLedger((previous) => appendEntry(previous, event, detail, at));
@@ -252,9 +313,40 @@ export function ColdChainProvider({ children }: { children: ReactNode }) {
     writeStorage(LEDGER_KEY, ledger);
   }, [ledger]);
 
+  // Adjusts `investigation` during render when `ledger` has changed since the
+  // last render, following React's "adjusting state when a prop changes"
+  // pattern rather than an effect — an effect would run a render late and
+  // cascade an extra commit. Scans every entry with a sequence after
+  // `lastScannedSequence`, not just the newest one: a single interval tick
+  // can append EXCURSION_OPEN, INVESTIGATION_OPEN and TEMPERATURE_READING
+  // together (a breach coinciding with the 10s ledger-append cadence), and
+  // TEMPERATURE_READING — the actual newest entry in that batch — carries no
+  // Investigation transition, which would hide the one from INVESTIGATION_OPEN
+  // entirely. This is immune to older entries sliding out of the
+  // MAX_LEDGER_ENTRIES window: only entries newer than the last scan matter,
+  // regardless of what else has fallen off the front of the array.
+  const newestSequence = ledger.length > 0 ? ledger[ledger.length - 1].sequence : 0;
+  if (newestSequence !== lastScannedSequence) {
+    setLastScannedSequence(newestSequence);
+    for (const entry of ledger) {
+      if (entry.sequence <= lastScannedSequence) continue;
+      if (entry.event === "INVESTIGATION_OPEN") {
+        setInvestigation({ status: "UNDER_INVESTIGATION", openEntry: entry });
+        // An Investigation cannot span a SHIPMENT_CREATE — see
+        // deriveInvestigationState's docstring in ledger.ts.
+      } else if (entry.event === "INVESTIGATION_RESOLVED" || entry.event === "SHIPMENT_CREATE") {
+        setInvestigation({ status: "CLEARED", openEntry: null });
+      }
+    }
+  }
+
   useEffect(() => {
     writeStorage(NOTIFICATIONS_SEEN_KEY, notificationsSeen);
   }, [notificationsSeen]);
+
+  useEffect(() => {
+    writeStorage(OPEN_INVESTIGATION_KEY, investigation.openEntry);
+  }, [investigation]);
 
   useEffect(() => {
     if (!isMonitoring) return undefined;
@@ -278,6 +370,19 @@ export function ColdChainProvider({ children }: { children: ReactNode }) {
           `${value.toFixed(1)} °C — ${movement} safe corridor`,
           at,
         );
+
+        // A breach opens an Investigation automatically. While one is already
+        // open, further breaches are absorbed into it rather than opening a
+        // second — the operator is already on the hook for one unresolved
+        // problem, not a new one per alarm.
+        if (nextStatus === "EXCURSION" && !investigationOpenRef.current) {
+          investigationOpenRef.current = true;
+          appendLedger(
+            "INVESTIGATION_OPEN",
+            `Investigation opened — triggered by excursion at ${value.toFixed(1)} °C`,
+            at,
+          );
+        }
       }
 
       sampleCountRef.current += 1;
@@ -336,6 +441,12 @@ export function ColdChainProvider({ children }: { children: ReactNode }) {
     setReadings(seeded);
     setSecondsUntilLedgerAppend(Math.round(LEDGER_INTERVAL_MS / 1000));
 
+    // An Investigation cannot span a SHIPMENT_CREATE (deriveInvestigationState
+    // in ledger.ts, and the render-time adjustment above, both encode this),
+    // so `investigation` resets on its own once this append lands. Only the
+    // interval callback's synchronous ref guard needs resetting here.
+    investigationOpenRef.current = false;
+
     // The trail is append-only: a new shipment opens a new record on the same
     // chain rather than erasing what came before.
     appendLedger("SHIPMENT_CREATE", describeShipment(next), now);
@@ -346,6 +457,43 @@ export function ColdChainProvider({ children }: { children: ReactNode }) {
     setFieldLogMeta({ ...fieldLogMeta, handedOffAt: now.toISOString() });
     appendLedger("HANDOFF_INIT", `Handoff confirmed — ${fieldLogMeta.route}`, now);
   }, [appendLedger, fieldLogMeta]);
+
+  // Resolving requires an explicit human action with a reason and a note —
+  // the temperature returning to range proves the corridor recovered, not
+  // that anyone reviewed why it left it, so nothing here auto-resolves.
+  const resolveInvestigation = useCallback(
+    (reason: ResolutionReason, note: string) => {
+      const trimmedNote = note.trim();
+      if (!trimmedNote) return;
+      // Reads current `investigation` state, not a fresh scan of `ledger`:
+      // the entry that opened this Investigation may already have slid out
+      // of the retained window, and a fresh scan would find nothing to
+      // resolve.
+      const openEntry = investigation.openEntry;
+      if (!openEntry) return;
+
+      // The triggering excursion is appended one sequence before its
+      // INVESTIGATION_OPEN, so the covered set starts there. Excursions that
+      // themselves aged out of the window are undercounted here — the same
+      // sliding-window limitation `verifyChain` already documents.
+      const covered = coveredExcursionSequences(ledger, openEntry.sequence - 1);
+      const coveredLabel =
+        covered.length > 0
+          ? `covered excursion${covered.length > 1 ? "s" : ""} ${covered.map((sequence) => `#${sequence}`).join(", ")}`
+          : "covered no further excursions";
+
+      appendLedger(
+        "INVESTIGATION_RESOLVED",
+        `${resolutionReasonLabel(reason)} — ${trimmedNote} — ${coveredLabel}`,
+        new Date(),
+      );
+      // The ledger-tail effect will also flip `investigation` to Cleared once
+      // this INVESTIGATION_RESOLVED entry lands, but the interval callback's
+      // guard is a plain ref and must be reset here, synchronously.
+      investigationOpenRef.current = false;
+    },
+    [appendLedger, ledger, investigation],
+  );
 
   const chartPath = useMemo(
     () => buildChartPath(readings.map((reading) => reading.value)),
@@ -389,6 +537,8 @@ export function ColdChainProvider({ children }: { children: ReactNode }) {
       ledger,
       chainVerification,
       discardedEntryCount: storedChain.discarded,
+      investigation,
+      resolveInvestigation,
       notifications,
       unreadNotificationCount,
       markNotificationsRead,
@@ -409,6 +559,8 @@ export function ColdChainProvider({ children }: { children: ReactNode }) {
       ledger,
       chainVerification,
       storedChain.discarded,
+      investigation,
+      resolveInvestigation,
       notifications,
       unreadNotificationCount,
       markNotificationsRead,

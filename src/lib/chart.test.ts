@@ -7,6 +7,7 @@ import {
   SAFE_MIN_C,
   buildChartPath,
   clampTemperature,
+  clampToCorridor,
   isExcursion,
   statusFor,
   toChartX,
@@ -119,6 +120,34 @@ describe("nextTemperature", () => {
   it("can reach an excursion, so the state is exercisable", () => {
     expect(clampTemperature(1.2)).toBe(CHART_MIN_C);
     expect(isExcursion(clampTemperature(1.2))).toBe(true);
+  });
+});
+
+describe("clampToCorridor", () => {
+  it("pins values onto the corridor edges, not the plotted domain", () => {
+    // clampTemperature allows a degree of headroom either side so an excursion
+    // is visible on the chart. Seeded history must not use it.
+    expect(clampToCorridor(1.2)).toBe(SAFE_MIN_C);
+    expect(clampToCorridor(9.4)).toBe(SAFE_MAX_C);
+    expect(clampTemperature(1.2)).toBeLessThan(SAFE_MIN_C);
+  });
+
+  it("leaves readings already inside the corridor untouched", () => {
+    expect(clampToCorridor(4.8)).toBe(4.8);
+    expect(clampToCorridor(SAFE_MIN_C)).toBe(SAFE_MIN_C);
+    expect(clampToCorridor(SAFE_MAX_C)).toBe(SAFE_MAX_C);
+  });
+
+  it("keeps a seeded random walk inside the corridor", () => {
+    // The seed walks from 4.8 by a random drift per sample. Without the
+    // corridor clamp the walk can finish outside 2-8, which would render as an
+    // EXCURSION with no ledger entry behind it — the gauge and the Ledger
+    // disagreeing about a shipment nobody had touched yet.
+    let value = 4.8;
+    for (let i = 0; i < READING_WINDOW * 50; i += 1) {
+      value = clampToCorridor(nextTemperature(value, randomDrift()));
+      expect(isExcursion(value)).toBe(false);
+    }
   });
 });
 

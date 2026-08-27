@@ -1,48 +1,89 @@
-# Context
+# Vault Cold Chain Console
 
-Vault is a cold-chain integrity console for monitoring a vaccine shipment's temperature corridor. It records temperature readings to a hash-chained ledger that can be verified after the fact, and tracks one box from loading bay to handoff.
+A client-side console for monitoring a single cold-chain shipment: it simulates temperature readings, keeps a tamper-evident audit trail of everything that happens, and tracks whether the shipment's record can currently be trusted.
 
-## Domain
+## Language
 
-**Shipment** — a single box with an identifier, destination, product, and route. It transitions from creation through operation to permanent handoff, with every state change appended to the ledger.
+**Excursion**:
+A period where a temperature reading falls outside the safe corridor (2-8 degrees C). Logged automatically to the Ledger as it opens and clears.
+_Avoid_: Breach, alarm, incident.
 
-**Reading** — a single temperature measurement, generated at regular intervals. Each reading is either safe (within the corridor) or an excursion (outside it).
+**Ledger**:
+The append-only, hash-chained record of every event that happens to the shipment (readings, excursions, handoffs, investigations). The sole source of truth - nothing about the shipment's history exists outside it.
+_Avoid_: Log, audit trail (as a separate thing - the Ledger *is* the audit trail).
 
-**Corridor** — the safe temperature range for the shipment, typically 2–8 degrees Celsius. Excursions are readings that fall outside this band.
+**Intact / Verified**:
+The cryptographic fact that no retained Ledger entry has been edited, reordered, or broken from its chain since it was written. Computed structurally from the hash chain itself and has no notion of workflow or human review.
+_Avoid_: Cleared, trusted (reserve those for Investigation status - see below).
 
-**Excursion** — a reading outside the safe corridor. An excursion opens a state, and the next safe reading clears it.
+**Investigation**:
+The record of human review opened automatically the moment an Excursion begins. While open, it absorbs any further Excursions without spawning a new one - a second alarm while the first is unresolved is the same unresolved problem, not a new case. It closes only when a person explicitly resolves it with a Resolution Reason and a note. Recorded in the Ledger via `INVESTIGATION_OPEN` and `INVESTIGATION_RESOLVED` entries, the latter listing the sequence numbers of every Excursion it covered.
+_Avoid_: Ticket, case, incident.
 
-**Ledger** — an append-only hash-chained record of events: readings, excursion openings and clearings, and shipment mutations (creation, edits, handoff). Entries are immutable once written.
+**Cleared / Under Investigation**:
+The shipment-wide status of whether the Ledger can currently be trusted from a workflow standpoint: Under Investigation while any Investigation is open, Cleared otherwise. This is a single global flag for the whole Ledger, not a per-entry annotation - one open Investigation is enough to withhold clearance for the entire shipment. Distinct from, and independent of, whether the chain is Intact.
+_Avoid_: Verified (see Intact / Verified above).
 
-**Ledger entry** — a single record in the chain, containing sequence number, event type, timestamp, event detail, and the hash of the previous entry.
+**Resolution Reason**:
+The structured category chosen when resolving an Investigation (e.g. Sensor Fault, Carrier Delay, Confirmed Loss, Other), paired with a required freeform note. Makes investigations queryable, not just readable.
+_Avoid_: Ticket status, disposition.
 
-**Digest** — the SHA-256 hash of a ledger entry's contents. The digest chain proves integrity: each entry commits to the previous entry's digest, so altering any entry breaks the chain.
+## Visual language
 
-**Verification verdict** — the result of recomputing the entire chain's digests and links. Possible verdicts: OK (chain intact), DIGEST_MISMATCH (entry was edited), BROKEN_LINK (sequence interrupted), OUT_OF_ORDER (sequence numbers non-consecutive), BAD_ROOT (genesis hash invalid), BAD_SEQUENCE (sequence number malformed).
+The theme defines a small vocabulary of surfaces, weights and tones. Every
+colour in the app comes from it; nothing hardcodes a value.
 
-**Handoff** — the permanent transfer of the shipment to another party. Once handed off, the shipment record is locked and can no longer be edited.
+**Surface / Raised / Sunken**:
+The three layers. Surface is the page itself, the ground everything sits on.
+Raised is a layer above it — a card, a panel, a floating control. Sunken is a
+well recessed below it — a table header, a hash pill, a field. They must read
+as three distinguishable layers. Light mode expresses this with luminance
+steps plus a cast shadow; dark mode with luminance alone, because a shadow on
+a near-black ground reads as mud rather than depth.
+_Avoid_: Background, foreground, elevation levels (see Elevation below).
 
-## Visual Language
+**Ink / Muted ink / Subtle ink**:
+The three text weights, in descending prominence: the thing itself, its
+supporting detail, its metadata. Every weight stays legible against every
+surface — a weight that drops below legibility stops being information and
+becomes texture.
+_Avoid_: Primary/secondary text, grey.
 
-**Surface** — the page background; the ground that everything sits on.
+**Line / Strong line**:
+A hairline separating regions. The strong variant is darker, for edges that
+must survive on a busy background or carry a hover state.
+_Avoid_: Border colour, divider.
 
-**Raised** — a layer above the surface, perceptibly elevated. In light mode, expressed via luminance and a cast shadow; in dark mode, by luminance alone (shadows on near-black read as mud).
+**Brand**:
+The single accent, in a ramp: a fill, its hover, a text-safe shade, a tint,
+and an edge for that tint. The brand punctuates — an eyebrow, a primary
+action, a selected row — it does not carpet.
+_Avoid_: Primary colour, theme colour.
 
-**Sunken** — a well recessed below the surface, visually distinct from both surface and raised. Never casts a shadow.
+**Tone**:
+The semantic colouring of a status chip or panel: success, warning, danger or
+neutral. Each has a text shade, a tint and an edge. A tone is a presentation
+concern and never the source of truth — it reflects Ledger state, it does not
+define it. Warning is the tone an Excursion and an open Investigation carry.
+_Avoid_: Status colour, severity, alert level.
 
-**Line** — a hairline separating regions. Strong line — a darker variant, for edges that must survive on a busy background.
-
-**Ink** — the primary text weight, used for the thing itself. Muted ink — a lighter weight for supporting detail. Subtle ink — the lightest weight for metadata. All three weights remain legible against both surface and raised, so information stays information, not texture.
-
-**Brand** — the single accent color. Its fill is the primary action state; hover shifts to a darker shade. Brand ink is a text-safe variant. Brand soft is a tint for backgrounds (badges, chips, charts). Brand line is an edge for soft backgrounds in light mode; dark mode uses no edge.
-
-**Status hues** — three semantic colors representing outcomes. Safe (success) is green, warning is amber, breach (danger) is red. Each status has a text shade (for labels), a soft tint (for badges and backgrounds), and an edge color (for outlined containers in light mode; dark mode uses no edge). Status must be identifiable by more than hue alone at badge size.
-
-**Elevation** — a light-mode-only device expressing depth via layered shadows. Three named steps: subtle, medium, and pronounced. Dark mode uses luminance steps instead, so elevation tokens are neutral in dark mode.
+**Elevation**:
+The named steps of depth. Elevation is a light-mode device: dark mode
+separates its layers by luminance, so the elevation steps resolve to nothing
+there.
+_Avoid_: Shadow, z-level.
 
 ## Invariants
 
-- Every colour used in the app comes from a token defined in the CSS; nothing hardcodes a value.
-- The three surfaces (surface, raised, sunken) must render as three visually distinguishable layers, not one flat plane. Light mode previously violated this by rendering all three within a few percent of each other, so the vocabulary described layers the screen did not have.
-- Text contrast must meet WCAG AA (4.5:1 minimum) in both light and dark themes.
-- Solid tint tokens are preferred over transparency for surfaces and edges, because a translucent layer inherits character from whatever lies behind it, making it unreliable across different backgrounds.
+- Every colour comes from a token. A raw hex or a stock Tailwind palette class
+  in a component is a defect.
+- The three surfaces must render as three distinguishable layers in both
+  themes. Light mode violated this before the palette was rebuilt — it
+  declared three and rendered one.
+- Text contrast holds to WCAG AA (4.5:1) for every ink weight against every
+  surface, in both themes.
+- Solid tint and edge tokens are preferred to transparency. A translucent
+  layer takes its character from whatever happens to sit behind it, which is
+  what made the light theme read as washed out.
+- Dark mode is not changed as a side effect of a light-mode change. Anything
+  that would alter it is scoped, or the token resolves to nothing there.

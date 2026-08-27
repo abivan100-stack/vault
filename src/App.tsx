@@ -68,7 +68,7 @@ function mobileNavLinkClass({ isActive }: { isActive: boolean }): string {
 }
 
 function notificationIcon(event: LedgerEntry["event"]) {
-  if (event === "EXCURSION_OPEN") return TriangleAlert;
+  if (event === "EXCURSION_OPEN" || event === "INVESTIGATION_OPEN") return TriangleAlert;
   if (event === "HANDOFF_INIT") return Truck;
   return ShieldCheck;
 }
@@ -102,7 +102,7 @@ function NotificationsDialog({
             <ul className="divide-y divide-line">
               {entries.map((entry) => {
                 const Icon = notificationIcon(entry.event);
-                const isAlert = entry.event === "EXCURSION_OPEN";
+                const isAlert = entry.event === "EXCURSION_OPEN" || entry.event === "INVESTIGATION_OPEN";
                 return (
                   <li key={entry.hash} className="flex items-start gap-3 p-4">
                     <span

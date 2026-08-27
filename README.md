@@ -31,6 +31,9 @@ The same four steps run in CI (`.github/workflows/ci.yml`) on every pull request
 test are scoped to `src/`, so a git worktree checked out under `.claude/` is not collected
 as part of this project.
 
+Before changing anything, read **[AGENTS.md](AGENTS.md)** -- the conventions there are
+derived from bugs this codebase actually shipped, not from taste.
+
 ## Routes
 
 | Route              | Purpose                                                             |
@@ -145,6 +148,26 @@ src/
 
 Logic lives in `src/lib` as pure functions, which is what the test suite covers; the
 components are rendering on top of it.
+
+## Testing
+
+80 tests over `src/lib`, sitting beside their source as `*.test.ts`:
+
+| File | Covers |
+| --- | --- |
+| `hash.test.ts` | SHA-256 against the FIPS 180-4 vectors and `node:crypto`, across padding boundaries and multi-byte UTF-8 |
+| `ledger.test.ts` | Every way a chain can break, and the boundary of what verification can claim |
+| `chart.test.ts` | Domain geometry, the random walk staying in range, derived time labels |
+| `shipment.test.ts` | Normalising hostile stored state, route and dose parsing, validation |
+| `csv.test.ts` | RFC 4180 quoting and formula-injection guards |
+
+The suite covers logic, not rendering -- which is the reason logic lives in `src/lib` as
+pure functions rather than inside components. Several tests encode *why* something is the
+way it is: `chart.test.ts` asserts the plotted domain is wider than the safe corridor, so
+narrowing it fails a test instead of silently making excursions invisible again.
+
+Randomness is injected (`nextTemperature(previous, drift)`, `randomSerial(random)`) so the
+transforms stay pure and deterministic under test.
 
 ## Design
 
