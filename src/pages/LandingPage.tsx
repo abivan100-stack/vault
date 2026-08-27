@@ -1,12 +1,50 @@
+import { useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
+import anime from "animejs";
 import { Activity, ArrowRight, Database, Package } from "lucide-react";
 import { useColdChain } from "@/context/ColdChainContext";
 import { Button } from "@/components/ui/button";
+import { Card, CardFooter, CardHeader } from "@/components/ui/card";
+import StatusPill from "@/components/StatusPill";
+import { DURATION, EASING, prefersReducedMotion } from "@/lib/motion";
 import { SAFE_MAX_C, SAFE_MIN_C } from "@/lib/chart";
 import { LEDGER_INTERVAL_MS, SAMPLE_INTERVAL_MS, formatClock } from "@/lib/simulation";
 
 export default function LandingPage() {
   const navigate = useNavigate();
+
+  // One entrance, once per visit: the hero block and the "right now" preview
+  // card (both direct children of `heroRef`), then the three feature cards
+  // (children of `cardsRowRef`). Scoped to these two containers' own
+  // children — never a global selector — and mount-only, so it never
+  // competes with the live values ticking inside the preview card.
+  const heroRef = useRef<HTMLElement>(null);
+  const cardsRowRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (prefersReducedMotion()) return undefined;
+
+    const heroChildren = heroRef.current ? Array.from(heroRef.current.children) : [];
+    const cardChildren = cardsRowRef.current ? Array.from(cardsRowRef.current.children) : [];
+    const targets = [...heroChildren, ...cardChildren] as HTMLElement[];
+    if (targets.length === 0) return undefined;
+
+    anime.remove(targets);
+    const instance = anime({
+      targets,
+      translateY: [10, 0],
+      opacity: [0, 1],
+      duration: DURATION.slow - 200, // 280ms per item
+      delay: anime.stagger(50),
+      easing: EASING.out,
+    });
+
+    return () => {
+      instance.pause();
+      anime.remove(targets);
+    };
+  }, []);
+
   // The preview reflects real state. A hardcoded snapshot would contradict the
   // console one click away.
   const { temperature, status, ledger, chainVerification, discardedEntryCount, fieldLogMeta, lastSyncAt } =
@@ -21,7 +59,7 @@ export default function LandingPage() {
 
   return (
     <div className="space-y-10">
-      <section className="grid gap-10 pt-4 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
+      <section ref={heroRef} className="grid gap-10 pt-4 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
         <div>
           <p className="eyebrow">Cold-chain integrity console</p>
           <h1 className="mt-3 max-w-[16ch] text-[34px] font-semibold leading-[1.1] tracking-[-0.03em] text-ink sm:text-[40px]">
@@ -54,13 +92,13 @@ export default function LandingPage() {
         </div>
 
         {/* Live preview */}
-        <div className="rounded-xl border border-line bg-raised">
-          <div className="flex items-center justify-between border-b border-line px-5 py-3.5">
+        <Card>
+          <CardHeader className="flex items-center justify-between px-5 py-3.5">
             <span className="eyebrow">Right now</span>
             <span className="tabular font-mono text-[11.5px] text-ink-subtle">
               {lastSyncAt ? formatClock(lastSyncAt) : "—"}
             </span>
-          </div>
+          </CardHeader>
 
           <dl className="divide-y divide-line">
             <div className="flex items-center justify-between gap-4 px-5 py-4">
@@ -76,13 +114,9 @@ export default function LandingPage() {
                 >
                   {temperature.toFixed(1)} °C
                 </span>
-                <span
-                  className={`inline-flex h-5 items-center rounded px-1.5 text-[11px] font-semibold ${
-                    isSafe ? "bg-success-soft text-success" : "bg-warning-soft text-warning"
-                  }`}
-                >
+                <StatusPill size="sm" tone={isSafe ? "success" : "warning"}>
                   {status}
-                </span>
+                </StatusPill>
               </dd>
             </div>
 
@@ -95,13 +129,9 @@ export default function LandingPage() {
                 <span className="tabular font-mono text-[13px] text-ink">
                   {latestEntry ? `#${String(latestEntry.sequence).padStart(3, "0")}` : "—"}
                 </span>
-                <span
-                  className={`inline-flex h-5 items-center rounded px-1.5 text-[11px] font-semibold ${
-                    isTrustworthy ? "bg-success-soft text-success" : "bg-warning-soft text-warning"
-                  }`}
-                >
+                <StatusPill size="sm" tone={isTrustworthy ? "success" : "warning"}>
                   {isTrustworthy ? "VERIFIED" : chainVerification.intact ? "INCOMPLETE" : "BROKEN"}
-                </span>
+                </StatusPill>
               </dd>
             </div>
 
@@ -120,7 +150,7 @@ export default function LandingPage() {
             </div>
           </dl>
 
-          <div className="border-t border-line px-5 py-3.5">
+          <CardFooter className="px-5 py-3.5">
             <button
               type="button"
               onClick={() => navigate("/ledger")}
@@ -129,13 +159,13 @@ export default function LandingPage() {
               Open the ledger
               <ArrowRight size={14} aria-hidden="true" />
             </button>
-          </div>
-        </div>
+          </CardFooter>
+        </Card>
       </section>
 
       <section className="border-t border-line pt-8">
         <h2 className="eyebrow">What it does</h2>
-        <div className="mt-4 grid gap-4 md:grid-cols-3">
+        <div ref={cardsRowRef} className="mt-4 grid gap-4 md:grid-cols-3">
           {[
             {
               icon: Activity,
@@ -153,13 +183,13 @@ export default function LandingPage() {
               body: "Box, batch, product, doses and route live in a single shipment record, editable in a dedicated workspace and saved to this browser.",
             },
           ].map((item) => (
-            <article key={item.title} className="rounded-xl border border-line bg-raised p-5">
+            <Card key={item.title} render={<article />} className="p-5">
               <item.icon size={16} className="text-ink-subtle" aria-hidden="true" />
               <h3 className="mt-3 text-[14px] font-semibold tracking-[-0.01em] text-ink">
                 {item.title}
               </h3>
               <p className="mt-1.5 text-[13.5px] leading-relaxed text-ink-muted">{item.body}</p>
-            </article>
+            </Card>
           ))}
         </div>
       </section>

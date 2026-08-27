@@ -2,7 +2,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, Copy, Download, Search, ShieldAlert, ShieldCheck } from "lucide-react";
 import { useColdChain } from "@/context/ColdChainContext";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import StatusPill from "@/components/StatusPill";
 import {
   Table,
   TableBody,
@@ -41,10 +43,10 @@ const FILTERS: { key: FilterKey; label: string; events: readonly LedgerEventType
   },
 ];
 
-function eventTone(event: LedgerEventType): string {
-  if (event === "EXCURSION_OPEN") return "bg-warning-soft text-warning";
-  if (event === "HANDOFF_INIT" || event === "SHIPMENT_CREATE") return "bg-brand-soft text-brand-ink";
-  return "bg-sunken text-ink-muted";
+function eventTone(event: LedgerEventType): "warning" | "brand" | "neutral" {
+  if (event === "EXCURSION_OPEN") return "warning";
+  if (event === "HANDOFF_INIT" || event === "SHIPMENT_CREATE") return "brand";
+  return "neutral";
 }
 
 function HashButton({
@@ -224,7 +226,7 @@ export default function LedgerPage() {
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-line bg-raised">
+      <Card className="overflow-hidden">
         <div className="overflow-x-auto">
           <Table>
             <TableHeader className="bg-sunken">
@@ -252,11 +254,9 @@ export default function LedgerPage() {
                       {String(entry.sequence).padStart(3, "0")}
                     </TableCell>
                     <TableCell className="py-3">
-                      <span
-                        className={`inline-flex h-6 items-center rounded-md px-2 text-[11.5px] font-medium ${eventTone(entry.event)}`}
-                      >
+                      <StatusPill tone={eventTone(entry.event)}>
                         {formatEventLabel(entry.event)}
-                      </span>
+                      </StatusPill>
                     </TableCell>
                     <TableCell className="py-3 text-[13.5px] text-ink">{entry.detail}</TableCell>
                     <TableCell className="tabular py-3 font-mono text-[12.5px] text-ink-muted">
@@ -271,7 +271,7 @@ export default function LedgerPage() {
             </TableBody>
           </Table>
         </div>
-      </div>
+      </Card>
 
       <div className="flex flex-wrap items-center justify-between gap-2 text-[12.5px] text-ink-subtle">
         <span>

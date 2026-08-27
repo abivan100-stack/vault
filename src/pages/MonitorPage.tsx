@@ -1,7 +1,12 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Pause, Play } from "lucide-react";
 import { useColdChain } from "@/context/ColdChainContext";
 import { Button } from "@/components/ui/button";
+import { Card, CardDescription, CardTitle } from "@/components/ui/card";
+import Stat from "@/components/Stat";
+import StatusPill from "@/components/StatusPill";
+import { playAnime } from "@/hooks/useAnime";
+import { DURATION, EASING } from "@/lib/motion";
 import {
   CHART_HEIGHT,
   CHART_TICKS,
@@ -17,18 +22,15 @@ import {
 } from "@/lib/chart";
 import { chartXLabels, formatClock, formatWindowLabel } from "@/lib/simulation";
 
-function StatusPill({ status }: { status: "SAFE" | "EXCURSION" }) {
-  const isSafe = status === "SAFE";
-  return (
-    <span
-      className={`inline-flex h-6 items-center rounded-md px-2 text-[11.5px] font-semibold tracking-[0.04em] ${
-        isSafe ? "bg-success-soft text-success" : "bg-warning-soft text-warning"
-      }`}
-    >
-      {status}
-    </span>
-  );
-}
+// Transform/opacity only, no bounce — a brief emphasis, not a bounce/pulse
+// loop. Fires once, only on an actual SAFE↔EXCURSION flip (see the effect
+// below), never on the 2s tick.
+const STATUS_TRANSITION = {
+  scale: [0.92, 1],
+  opacity: [0.5, 1],
+  duration: DURATION.base,
+  easing: EASING.out,
+};
 
 export default function MonitorPage() {
   const {
@@ -42,6 +44,26 @@ export default function MonitorPage() {
     secondsUntilLedgerAppend,
   } = useColdChain();
   const [hoveredId, setHoveredId] = useState<number | null>(null);
+
+  // Pulse the status pill (and, on an excursion, the reading itself) only on
+  // an actual SAFE↔EXCURSION flip. Seeding the ref with the current status
+  // means the first effect run (mount) always sees "no change" and skips —
+  // so this never fires on mount, and never on the 2s tick unless `status`
+  // itself changed.
+  const prevStatusRef = useRef(status);
+  const statusPillRef = useRef<HTMLSpanElement>(null);
+  const temperatureRef = useRef<HTMLSpanElement>(null);
+
+  useEffect(() => {
+    const previousStatus = prevStatusRef.current;
+    prevStatusRef.current = status;
+    if (previousStatus === status) return;
+
+    playAnime(statusPillRef.current, STATUS_TRANSITION);
+    if (status === "EXCURSION") {
+      playAnime(temperatureRef.current, STATUS_TRANSITION);
+    }
+  }, [status]);
 
   const hoveredIndex = hoveredId === null ? -1 : readings.findIndex((r) => r.id === hoveredId);
   const hoveredReading = hoveredIndex >= 0 ? readings[hoveredIndex] : null;
@@ -70,14 +92,23 @@ export default function MonitorPage() {
 
       <div className="grid gap-4 lg:grid-cols-[300px_1fr] lg:items-start">
         {/* Gauge */}
-        <section className="rounded-xl border border-line bg-raised p-5">
+        <Card render={<section />} className="p-5">
           <div className="flex items-center justify-between">
-            <h2 className="eyebrow">Current reading</h2>
-            <StatusPill status={status} />
+            <CardTitle>Current reading</CardTitle>
+            <span ref={statusPillRef} className="inline-flex">
+              <StatusPill
+                tone={status === "SAFE" ? "success" : "warning"}
+                weight="semibold"
+                tracking="wide"
+              >
+                {status}
+              </StatusPill>
+            </span>
           </div>
 
           <p className="mt-4 flex items-baseline gap-1.5">
             <span
+              ref={temperatureRef}
               className={`tabular text-[46px] font-semibold leading-none tracking-[-0.04em] ${
                 outOfCorridor ? "text-warning" : "text-ink"
               }`}
@@ -116,28 +147,15 @@ export default function MonitorPage() {
           </div>
 
           <dl className="mt-5 grid grid-cols-3 gap-3 border-t border-line pt-4">
-            <div>
-              <dt className="text-[11px] text-ink-subtle">Low</dt>
-              <dd className="tabular mt-0.5 font-mono text-[13px] font-medium text-ink">
-                {minValue.toFixed(1)}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-[11px] text-ink-subtle">High</dt>
-              <dd className="tabular mt-0.5 font-mono text-[13px] font-medium text-ink">
-                {maxValue.toFixed(1)}
-              </dd>
-            </div>
-            <div>
-              <dt className="text-[11px] text-ink-subtle">Excursions</dt>
-              <dd
-                className={`tabular mt-0.5 font-mono text-[13px] font-medium ${
-                  excursionCount > 0 ? "text-warning" : "text-ink"
-                }`}
-              >
-                {excursionCount}
-              </dd>
-            </div>
+            <Stat label="Low" value={minValue.toFixed(1)} mono size="sm" />
+            <Stat label="High" value={maxValue.toFixed(1)} mono size="sm" />
+            <Stat
+              label="Excursions"
+              value={excursionCount}
+              mono
+              size="sm"
+              tone={excursionCount > 0 ? "warning" : "default"}
+            />
           </dl>
 
           <Button
@@ -154,16 +172,16 @@ export default function MonitorPage() {
               ? `Next ledger append in ${secondsUntilLedgerAppend}s`
               : "Paused — no readings, no ledger appends"}
           </p>
-        </section>
+        </Card>
 
         {/* Chart */}
-        <section className="rounded-xl border border-line bg-raised p-5">
+        <Card render={<section />} className="p-5">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div>
-              <h2 className="eyebrow">Temperature history</h2>
-              <p className="mt-1 text-[13.5px] text-ink-muted">
+              <CardTitle>Temperature history</CardTitle>
+              <CardDescription>
                 {formatWindowLabel(readings).toLowerCase()} · {readings.length} readings
-              </p>
+              </CardDescription>
             </div>
             <span className="font-mono text-[11.5px] text-ink-subtle">°C</span>
           </div>
@@ -313,7 +331,7 @@ export default function MonitorPage() {
               ? `Outside the ${SAFE_MIN_C}–${SAFE_MAX_C} °C corridor — an excursion is open on the ledger.`
               : `Inside the ${SAFE_MIN_C}–${SAFE_MAX_C} °C corridor. Hover a point for the exact reading.`}
           </p>
-        </section>
+        </Card>
       </div>
     </div>
   );
