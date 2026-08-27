@@ -23,10 +23,10 @@
      the page turning grey. */
   --surface: #f0eee8;
   --raised: #ffffff;
-  --sunken: #e4e1d8;
+  --sunken: #e5e2db;
 
-  --line: #d9d5c9;
-  --line-strong: #b6b1a2;
+  --line: #d7d4cd;
+  --line-strong: #b4b0a8;
 
   /* Ink. Every weight clears WCAG AA (4.5:1) against both --surface and
      --raised, so secondary text stays information rather than texture. */

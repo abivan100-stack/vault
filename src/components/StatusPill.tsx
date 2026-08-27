@@ -8,7 +8,7 @@ const statusPillVariants = cva(
   // Badge's 1px border is what carries the tone's edge in light mode, so it is
   // kept rather than zeroed. The border tokens are transparent in dark, which
   // leaves the pill looking exactly as it did there.
-  "",
+  "dark:border-0",
   {
     variants: {
       size: {

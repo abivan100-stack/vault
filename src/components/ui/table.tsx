@@ -21,7 +21,7 @@ function TableHeader({ className, ...props }: React.ComponentProps<"thead">) {
   return (
     <thead
       data-slot="table-header"
-      className={cn("bg-sunken [&_tr]:border-b [&_tr]:border-line", className)}
+      className={cn("bg-sunken dark:bg-transparent [&_tr]:border-b [&_tr]:border-line", className)}
       {...props}
     />
   )
@@ -96,7 +96,7 @@ function TableCaption({
   return (
     <caption
       data-slot="table-caption"
-      className={cn("mt-4 text-sm text-ink-subtle", className)}
+      className={cn("mt-4 text-sm text-ink-muted", className)}
       {...props}
     />
   )

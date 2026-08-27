@@ -437,7 +437,7 @@ function Header({ isDark, onToggleTheme }: { isDark: boolean; onToggleTheme: () 
             </div>
 
             <div
-              className="hidden h-9 items-center gap-2 rounded-lg border border-line bg-raised px-2.5 shadow-e1 xl:flex"
+              className="hidden items-center gap-2 border-l border-line pl-2 xl:flex"
               title="Demo account — this prototype has no authentication"
             >
               <span className="grid h-8 w-8 place-items-center rounded-full bg-sunken font-mono text-[12px] font-semibold text-ink-muted">

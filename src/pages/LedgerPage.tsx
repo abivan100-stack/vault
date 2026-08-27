@@ -64,7 +64,7 @@ function HashButton({
       type="button"
       onClick={() => onCopy(hash)}
       title={hash}
-      className="inline-flex h-7 items-center gap-2 rounded-md border border-line bg-sunken px-2 transition-colors hover:border-line-strong hover:bg-sunken dark:bg-transparent"
+      className="inline-flex h-7 items-center gap-2 rounded-md border border-line bg-sunken px-2 transition-colors hover:border-line-strong hover:bg-sunken dark:bg-transparent dark:hover:border-line"
       aria-label={isCopied ? "Hash copied" : `Copy full hash ${hash}`}
     >
       <span className="tabular font-mono text-[12px] text-ink-muted">{shortHash(hash)}</span>
