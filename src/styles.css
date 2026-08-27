@@ -17,28 +17,50 @@
 :root {
   color-scheme: light;
 
-  --surface: #f7f7f5;
+  /* Surfaces. Light mode earns its depth from luminance steps: the page is
+     warm paper, cards are true white and sit above it, wells sit below. Each
+     step is ~1.15:1 against its neighbour — enough to read as a layer without
+     the page turning grey. */
+  --surface: #f0eee8;
   --raised: #ffffff;
-  --sunken: #f0f0ec;
+  --sunken: #e5e2db;
 
-  --line: #e3e3dd;
-  --line-strong: #cdcec6;
+  --line: #d7d4cd;
+  --line-strong: #b4b0a8;
 
-  --ink: #1a1c1a;
-  --ink-muted: #5e635e;
-  --ink-subtle: #8b908a;
+  /* Ink. Every weight clears WCAG AA (4.5:1) against both --surface and
+     --raised, so secondary text stays information rather than texture. */
+  --ink: #1c1e1b;
+  --ink-muted: #4d5250;
+  --ink-subtle: #5f635d;
 
-  --brand: #0f6b64;
-  --brand-hover: #0b5450;
-  --brand-ink: #0d5d57;
-  --brand-soft: #e4f0ee;
+  /* Brand. A ramp rather than one value doing four jobs: a fill, its hover, a
+     text-safe shade, a tint, and a border for that tint. */
+  --brand: #0d6d63;
+  --brand-hover: #0a544c;
+  --brand-ink: #0a5a52;
+  --brand-soft: #dcece9;
+  --brand-line: #a8cdc7;
 
-  --success: #2f7d4f;
-  --success-soft: #e5f1e8;
-  --warning: #9a5f16;
-  --warning-soft: #f8eeda;
-  --danger: #a13a2e;
-  --danger-soft: #f7e7e4;
+  /* Status. Text shades clear AA on their own soft background; the -line
+     token lets a soft chip carry an edge instead of floating. */
+  --success: #1f6b40;
+  --success-soft: #dcecdf;
+  --success-line: #a9cdb2;
+  --warning: #8a4f0a;
+  --warning-soft: #f6e8cc;
+  --warning-line: #dcbe86;
+  --danger: #98332a;
+  --danger-soft: #f6e0dc;
+  --danger-line: #e0aca4;
+
+  /* Elevation. Light-mode only — dark mode already separates layers by
+     luminance, and shadows on near-black surfaces read as mud. */
+  --elevation-1: 0 1px 2px rgba(28, 30, 27, 0.05), 0 1px 1px rgba(28, 30, 27, 0.03);
+  --elevation-2:
+    0 1px 2px rgba(28, 30, 27, 0.05), 0 4px 10px -2px rgba(28, 30, 27, 0.07);
+  --elevation-3:
+    0 2px 4px rgba(28, 30, 27, 0.06), 0 14px 28px -8px rgba(28, 30, 27, 0.12);
 
   --radius: 0.5rem;
 }
@@ -55,7 +77,7 @@
 
   --ink: #e9ebe8;
   --ink-muted: #9ba29d;
-  --ink-subtle: #6f766f;
+  --ink-subtle: #858c85;
 
   --brand: #4bb3a8;
   --brand-hover: #5cc4b8;
@@ -68,6 +90,17 @@
   --warning-soft: #33260f;
   --danger: #e08375;
   --danger-soft: #351c19;
+
+  /* New tokens, neutralised: dark mode is deliberately unchanged. Soft chips
+     keep their borderless look and layers keep their luminance-only depth. */
+  --brand-line: transparent;
+  --success-line: transparent;
+  --warning-line: transparent;
+  --danger-line: transparent;
+
+  --elevation-1: none;
+  --elevation-2: none;
+  --elevation-3: none;
 }
 
 /* shadcn/ui contract — mapped onto the Vault palette so the primitives inherit
@@ -117,13 +150,21 @@
   --color-brand-hover: var(--brand-hover);
   --color-brand-ink: var(--brand-ink);
   --color-brand-soft: var(--brand-soft);
+  --color-brand-line: var(--brand-line);
 
   --color-success: var(--success);
   --color-success-soft: var(--success-soft);
+  --color-success-line: var(--success-line);
   --color-warning: var(--warning);
   --color-warning-soft: var(--warning-soft);
+  --color-warning-line: var(--warning-line);
   --color-danger: var(--danger);
   --color-danger-soft: var(--danger-soft);
+  --color-danger-line: var(--danger-line);
+
+  --shadow-e1: var(--elevation-1);
+  --shadow-e2: var(--elevation-2);
+  --shadow-e3: var(--elevation-3);
 
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -159,6 +200,56 @@
   html {
     @apply font-sans;
     -webkit-text-size-adjust: 100%;
+
+    /* The scrollbar is the last piece of browser chrome on the page. Thin
+       everywhere, but the palette colour only applies in light mode (see the
+       .dark override below) — dark mode keeps the browser's own dark bar,
+       unchanged from before this refresh. Both properties inherit, so this
+       also covers the command palette, the notification panel and the
+       ledger's scroll regions. */
+    scrollbar-width: thin;
+    scrollbar-color: var(--line-strong) transparent;
+  }
+
+  /* Dark mode must render exactly as it did before this refresh: fall back to
+     the browser default track/thumb. color-scheme: dark is already set on
+     .dark, so that default renders as the browser's own dark-mode scrollbar.
+     .dark is applied on the root element itself (not an ancestor), so this
+     targets it directly rather than via the &:is(.dark *) descendant variant. */
+  .dark {
+    scrollbar-color: auto;
+  }
+
+  /* Safari and older WebKit do not support scrollbar-color. Chrome ignores
+     these pseudo-elements as soon as scrollbar-color is set, so gating them on
+     @supports keeps the two approaches from fighting over the same bar. Scoped
+     to light mode only, to match the scrollbar-color treatment above. */
+  @supports not (scrollbar-color: auto) {
+    /* :not(.dark, .dark *) excludes both the root element when it carries
+       .dark and every descendant of it, since .dark sits on the root itself
+       rather than a wrapping ancestor. */
+    :not(.dark, .dark *)::-webkit-scrollbar {
+      width: 10px;
+      height: 10px;
+    }
+
+    :not(.dark, .dark *)::-webkit-scrollbar-track,
+    :not(.dark, .dark *)::-webkit-scrollbar-corner {
+      background: transparent;
+    }
+
+    /* The transparent border plus content-box clipping insets the thumb, so it
+       floats in the gutter instead of filling it wall to wall. */
+    :not(.dark, .dark *)::-webkit-scrollbar-thumb {
+      background-color: var(--line-strong);
+      background-clip: content-box;
+      border: 2px solid transparent;
+      border-radius: 999px;
+    }
+
+    :not(.dark, .dark *)::-webkit-scrollbar-thumb:hover {
+      background-color: var(--ink-subtle);
+    }
   }
 
   body {
@@ -192,9 +283,13 @@
    site; only things utilities cannot express well live here.
    --------------------------------------------------------------------------- */
 
-/* Section label above a heading — small, uppercase, muted. No "01 /" numbering. */
-.eyebrow {
-  @apply text-[11px] font-semibold uppercase tracking-[0.1em] text-ink-subtle;
+/* Section label above a heading — small, uppercase, muted. No "01 /" numbering.
+   Layered so a call site can override the colour with a utility; unlayered CSS
+   always wins over Tailwind's utilities regardless of source order. */
+@layer components {
+  .eyebrow {
+    @apply text-[11px] font-semibold uppercase tracking-[0.1em] text-ink-subtle;
+  }
 }
 
 .live-dot {
@@ -233,20 +328,36 @@
 }
 
 /* Chart internals — SVG presentation attributes are clearer as CSS. */
+
+/* Light gets its own values so the chart reads clearly against the white
+   card it's drawn on; dark reproduces today's appearance exactly via the
+   overrides at the bottom of this block. */
+:root {
+  /* A 5% brand wash on white plot area is essentially invisible, so light
+     uses the solid --brand-soft tint instead of an opacity trick. */
+  --chart-band-fill: var(--brand-soft);
+  --chart-band-opacity: 1;
+
+  /* Gridlines stay on --line (matches every other hairline in the app);
+     the corridor limits get a distinctly stronger, neutral color so they
+     read as the important lines rather than "a slightly bolder gridline". */
+  --chart-threshold-color: var(--ink-muted);
+}
+
 .chart-gridline {
   stroke: var(--line);
   stroke-width: 1;
 }
 
 .chart-threshold {
-  stroke: var(--line-strong);
+  stroke: var(--chart-threshold-color);
   stroke-width: 1;
   stroke-dasharray: 4 4;
 }
 
 .chart-band {
-  fill: var(--brand);
-  opacity: 0.05;
+  fill: var(--chart-band-fill);
+  opacity: var(--chart-band-opacity);
 }
 
 .chart-path {
@@ -302,4 +413,13 @@
   outline: none;
   stroke: var(--ring);
   stroke-width: 2;
+}
+
+/* Dark mode is deliberately unchanged: reproduce the pre-refresh look
+   (5% brand wash for the band, --line-strong for the threshold lines)
+   via chart-local overrides rather than touching the main .dark block. */
+.dark {
+  --chart-band-fill: var(--brand);
+  --chart-band-opacity: 0.05;
+  --chart-threshold-color: var(--line-strong);
 }

@@ -2,24 +2,12 @@ import { Check, Copy, MapPin, Settings2, Thermometer, Truck } from "lucide-react
 import { useNavigate } from "react-router-dom";
 import { useColdChain } from "@/context/ColdChainContext";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import Stat from "@/components/Stat";
 import { useToast } from "@/hooks/useToast";
 import { boxSerial, parseDoses, parseRoute } from "@/lib/shipment";
 import { formatClock, formatIsoDate } from "@/lib/simulation";
 import { SAFE_MAX_C, SAFE_MIN_C } from "@/lib/chart";
-
-function Field({ label, value, mono = false }: { label: string; value: string; mono?: boolean }) {
-  return (
-    <div className="min-w-0">
-      <dt className="text-[11.5px] text-ink-subtle">{label}</dt>
-      <dd
-        className={`mt-1 truncate text-[13.5px] font-medium text-ink ${mono ? "tabular font-mono text-[13px]" : ""}`}
-        title={value}
-      >
-        {value}
-      </dd>
-    </div>
-  );
-}
 
 export default function ShipmentPage() {
   const { fieldLogMeta, status, temperature } = useColdChain();
@@ -32,6 +20,14 @@ export default function ShipmentPage() {
   const doses = parseDoses(fieldLogMeta.doses);
   const isHandedOff = fieldLogMeta.handedOffAt !== null;
   const isSafe = status === "SAFE";
+
+  // Named because each is shown and used as the truncation tooltip.
+  const serial = boxSerial(fieldLogMeta.box);
+  const dosesLabel = doses === null ? fieldLogMeta.doses : `${doses.toLocaleString()} units`;
+  const startedLabel = `${formatIsoDate(fieldLogMeta.startedAt)} ${formatClock(fieldLogMeta.startedAt)}`;
+  const handoffLabel = fieldLogMeta.handedOffAt
+    ? `${formatIsoDate(fieldLogMeta.handedOffAt)} ${formatClock(fieldLogMeta.handedOffAt)}`
+    : "In transit";
 
   const handleCopy = async () => {
     const summary = `${fieldLogMeta.box} · ${fieldLogMeta.batch} · ${fieldLogMeta.route}`;
@@ -69,10 +65,10 @@ export default function ShipmentPage() {
       </header>
 
       <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr] lg:items-start">
-        <section className="rounded-xl border border-line bg-raised">
-          <div className="flex items-start justify-between gap-3 border-b border-line p-5">
+        <Card render={<section />}>
+          <CardHeader className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-              <h2 className="eyebrow">Field log</h2>
+              <CardTitle>Field log</CardTitle>
               <p className="tabular mt-1.5 truncate font-mono text-[13px] font-medium text-ink">
                 {fieldLogMeta.logId}
               </p>
@@ -86,22 +82,62 @@ export default function ShipmentPage() {
               <Copy size={14} aria-hidden="true" />
               Copy
             </Button>
-          </div>
+          </CardHeader>
 
-          <dl className="grid grid-cols-2 gap-x-6 gap-y-5 p-5 sm:grid-cols-3">
-            <Field label="Box" value={fieldLogMeta.box} mono />
-            <Field label="Batch" value={fieldLogMeta.batch} mono />
-            <Field label="Serial" value={boxSerial(fieldLogMeta.box)} mono />
-            <Field label="Product" value={fieldLogMeta.product} />
-            <Field
-              label="Doses"
-              value={doses === null ? fieldLogMeta.doses : `${doses.toLocaleString()} units`}
+          <CardContent
+            render={<dl />}
+            className="grid grid-cols-2 gap-x-6 gap-y-5 sm:grid-cols-3"
+          >
+            <Stat
+              label="Box"
+              value={fieldLogMeta.box}
+              mono
+              truncate
+              title={fieldLogMeta.box}
+              className="min-w-0"
             />
-            <Field label="Corridor" value={fieldLogMeta.range} mono />
-          </dl>
+            <Stat
+              label="Batch"
+              value={fieldLogMeta.batch}
+              mono
+              truncate
+              title={fieldLogMeta.batch}
+              className="min-w-0"
+            />
+            <Stat
+              label="Serial"
+              value={serial}
+              mono
+              truncate
+              title={serial}
+              className="min-w-0"
+            />
+            <Stat
+              label="Product"
+              value={fieldLogMeta.product}
+              truncate
+              title={fieldLogMeta.product}
+              className="min-w-0"
+            />
+            <Stat
+              label="Doses"
+              value={dosesLabel}
+              truncate
+              title={dosesLabel}
+              className="min-w-0"
+            />
+            <Stat
+              label="Corridor"
+              value={fieldLogMeta.range}
+              mono
+              truncate
+              title={fieldLogMeta.range}
+              className="min-w-0"
+            />
+          </CardContent>
 
           {toast && (
-            <div className="border-t border-line px-5 py-3">
+            <CardFooter className="px-5 py-3">
               <p
                 className={`flex items-center gap-2 text-[13px] ${
                   toast.tone === "error" ? "text-warning" : "text-ink-muted"
@@ -110,16 +146,16 @@ export default function ShipmentPage() {
                 <Check size={14} aria-hidden="true" />
                 {toast.message}
               </p>
-            </div>
+            </CardFooter>
           )}
-        </section>
+        </Card>
 
         <div className="space-y-4">
-          <section className="rounded-xl border border-line bg-raised p-5">
-            <h2 className="eyebrow flex items-center gap-1.5">
+          <Card render={<section />} className="p-5">
+            <CardTitle className="flex items-center gap-1.5">
               <MapPin size={13} aria-hidden="true" />
               Route
-            </h2>
+            </CardTitle>
 
             <div className="mt-4 flex items-center gap-3">
               <div className="min-w-0 text-left">
@@ -144,19 +180,21 @@ export default function ShipmentPage() {
             </div>
 
             <dl className="mt-5 grid grid-cols-2 gap-4 border-t border-line pt-4">
-              <Field
+              <Stat
                 label="Started"
-                value={`${formatIsoDate(fieldLogMeta.startedAt)} ${formatClock(fieldLogMeta.startedAt)}`}
+                value={startedLabel}
                 mono
+                truncate
+                title={startedLabel}
+                className="min-w-0"
               />
-              <Field
+              <Stat
                 label="Handoff"
-                value={
-                  fieldLogMeta.handedOffAt
-                    ? `${formatIsoDate(fieldLogMeta.handedOffAt)} ${formatClock(fieldLogMeta.handedOffAt)}`
-                    : "In transit"
-                }
+                value={handoffLabel}
                 mono
+                truncate
+                title={handoffLabel}
+                className="min-w-0"
               />
             </dl>
 
@@ -174,10 +212,10 @@ export default function ShipmentPage() {
               <Thermometer size={15} aria-hidden="true" />
               View live temperature
             </Button>
-          </section>
+          </Card>
 
-          <section className="rounded-xl border border-line bg-sunken p-5">
-            <h2 className="eyebrow">Why the corridor matters</h2>
+          <Card render={<section />} surface="sunken" className="p-5">
+            <CardTitle>Why the corridor matters</CardTitle>
             <p className="mt-2 text-[13.5px] leading-relaxed text-ink-muted">
               {doses === null
                 ? "This payload"
@@ -186,7 +224,7 @@ export default function ShipmentPage() {
               for the whole run from {route.origin} to {route.destination}. Vault records the
               evidence so the handoff can be verified rather than trusted.
             </p>
-          </section>
+          </Card>
         </div>
       </div>
     </div>

@@ -27,3 +27,63 @@ _Avoid_: Verified (see Intact / Verified above).
 **Resolution Reason**:
 The structured category chosen when resolving an Investigation (e.g. Sensor Fault, Carrier Delay, Confirmed Loss, Other), paired with a required freeform note. Makes investigations queryable, not just readable.
 _Avoid_: Ticket status, disposition.
+
+## Visual language
+
+The theme defines a small vocabulary of surfaces, weights and tones. Every
+colour in the app comes from it; nothing hardcodes a value.
+
+**Surface / Raised / Sunken**:
+The three layers. Surface is the page itself, the ground everything sits on.
+Raised is a layer above it — a card, a panel, a floating control. Sunken is a
+well recessed below it — a table header, a hash pill, a field. They must read
+as three distinguishable layers. Light mode expresses this with luminance
+steps plus a cast shadow; dark mode with luminance alone, because a shadow on
+a near-black ground reads as mud rather than depth.
+_Avoid_: Background, foreground, elevation levels (see Elevation below).
+
+**Ink / Muted ink / Subtle ink**:
+The three text weights, in descending prominence: the thing itself, its
+supporting detail, its metadata. Every weight stays legible against every
+surface — a weight that drops below legibility stops being information and
+becomes texture.
+_Avoid_: Primary/secondary text, grey.
+
+**Line / Strong line**:
+A hairline separating regions. The strong variant is darker, for edges that
+must survive on a busy background or carry a hover state.
+_Avoid_: Border colour, divider.
+
+**Brand**:
+The single accent, in a ramp: a fill, its hover, a text-safe shade, a tint,
+and an edge for that tint. The brand punctuates — an eyebrow, a primary
+action, a selected row — it does not carpet.
+_Avoid_: Primary colour, theme colour.
+
+**Tone**:
+The semantic colouring of a status chip or panel: success, warning, danger or
+neutral. Each has a text shade, a tint and an edge. A tone is a presentation
+concern and never the source of truth — it reflects Ledger state, it does not
+define it. Warning is the tone an Excursion and an open Investigation carry.
+_Avoid_: Status colour, severity, alert level.
+
+**Elevation**:
+The named steps of depth. Elevation is a light-mode device: dark mode
+separates its layers by luminance, so the elevation steps resolve to nothing
+there.
+_Avoid_: Shadow, z-level.
+
+## Invariants
+
+- Every colour comes from a token. A raw hex or a stock Tailwind palette class
+  in a component is a defect.
+- The three surfaces must render as three distinguishable layers in both
+  themes. Light mode violated this before the palette was rebuilt — it
+  declared three and rendered one.
+- Text contrast holds to WCAG AA (4.5:1) for every ink weight against every
+  surface, in both themes.
+- Solid tint and edge tokens are preferred to transparency. A translucent
+  layer takes its character from whatever happens to sit behind it, which is
+  what made the light theme read as washed out.
+- Dark mode is not changed as a side effect of a light-mode change. Anything
+  that would alter it is scoped, or the token resolves to nothing there.

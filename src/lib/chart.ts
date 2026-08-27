@@ -25,6 +25,19 @@ export function clampTemperature(value: number): number {
   return Math.min(CHART_MAX_C, Math.max(CHART_MIN_C, value));
 }
 
+/**
+ * Clamps into the safe corridor rather than the plotted domain.
+ *
+ * Seeded history has to start inside the corridor. The Ledger is the sole
+ * source of truth for whether an Excursion happened, and seeding writes no
+ * entries — so a seeded reading outside 2-8 would render as EXCURSION with no
+ * EXCURSION_OPEN or INVESTIGATION_OPEN behind it, leaving the gauge and the
+ * Ledger disagreeing on a shipment nobody had touched yet.
+ */
+export function clampToCorridor(value: number): number {
+  return Math.min(SAFE_MAX_C, Math.max(SAFE_MIN_C, value));
+}
+
 /** Maps a temperature to a y pixel, 0 = top (CHART_MAX_C). */
 export function toChartY(value: number, height: number = CHART_HEIGHT): number {
   const span = CHART_MAX_C - CHART_MIN_C;

@@ -11,7 +11,9 @@ import {
 } from "lucide-react";
 import { useColdChain } from "@/context/ColdChainContext";
 import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import StatusPill from "@/components/StatusPill";
 import { Label } from "@/components/ui/label";
 import {
   Table,
@@ -60,16 +62,18 @@ const FILTERS: { key: FilterKey; label: string; events: readonly LedgerEventType
 ];
 
 const SELECT_CLASS =
-  "h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 text-[13.5px] text-ink transition-colors outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
+  "h-8 w-full min-w-0 rounded-lg border border-input bg-raised px-2.5 text-[13.5px] text-ink transition-colors outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-transparent";
 
 const TEXTAREA_CLASS =
-  "w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 py-1.5 text-[13.5px] text-ink transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
+  "w-full min-w-0 rounded-lg border border-input bg-raised px-2.5 py-1.5 text-[13.5px] text-ink transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-transparent";
 
-function eventTone(event: LedgerEventType): string {
-  if (event === "EXCURSION_OPEN" || event === "INVESTIGATION_OPEN") return "bg-warning-soft text-warning";
-  if (event === "INVESTIGATION_RESOLVED") return "bg-success-soft text-success";
-  if (event === "HANDOFF_INIT" || event === "SHIPMENT_CREATE") return "bg-brand-soft text-brand-ink";
-  return "bg-sunken text-ink-muted";
+function eventTone(
+  event: LedgerEventType
+): "success" | "warning" | "brand" | "neutral" {
+  if (event === "EXCURSION_OPEN" || event === "INVESTIGATION_OPEN") return "warning";
+  if (event === "INVESTIGATION_RESOLVED") return "success";
+  if (event === "HANDOFF_INIT" || event === "SHIPMENT_CREATE") return "brand";
+  return "neutral";
 }
 
 function HashButton({
@@ -87,7 +91,7 @@ function HashButton({
       type="button"
       onClick={() => onCopy(hash)}
       title={hash}
-      className="inline-flex h-7 items-center gap-2 rounded-md border border-line px-2 transition-colors hover:bg-sunken"
+      className="inline-flex h-7 items-center gap-2 rounded-md border border-line bg-sunken px-2 transition-colors hover:border-line-strong hover:bg-sunken dark:bg-transparent dark:hover:border-line"
       aria-label={isCopied ? "Hash copied" : `Copy full hash ${hash}`}
     >
       <span className="tabular font-mono text-[12px] text-ink-muted">{shortHash(hash)}</span>
@@ -204,8 +208,10 @@ export default function LedgerPage() {
           Entries that were unreadable on load count against integrity too: a
           shortened chain that verifies is still evidence something rewrote it. */}
       <div
-        className={`flex items-start gap-3 rounded-lg border p-3.5 ${
-          isTrustworthy ? "border-line bg-raised" : "border-warning/40 bg-warning-soft"
+        className={`flex items-start gap-3 rounded-lg border p-3.5 shadow-e1 ${
+          isTrustworthy
+            ? "border-line bg-raised"
+            : "border-warning-line bg-warning-soft dark:border-warning/40"
         }`}
       >
         {isTrustworthy ? (
@@ -238,8 +244,10 @@ export default function LedgerPage() {
           chain can be Intact and Under Investigation at once, or Cleared and
           broken: one is a cryptographic fact, the other a workflow fact. */}
       <div
-        className={`flex items-start gap-3 rounded-lg border p-3.5 ${
-          investigation.status === "CLEARED" ? "border-line bg-raised" : "border-warning/40 bg-warning-soft"
+        className={`flex items-start gap-3 rounded-lg border p-3.5 shadow-e1 ${
+          investigation.status === "CLEARED"
+            ? "border-line bg-raised"
+            : "border-warning-line bg-warning-soft dark:border-warning/40"
         }`}
       >
         {investigation.status === "CLEARED" ? (
@@ -303,7 +311,7 @@ export default function LedgerPage() {
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-xl border border-line bg-raised">
+      <Card className="overflow-hidden">
         <div className="overflow-x-auto">
           <Table>
             <TableHeader className="bg-sunken">
@@ -331,11 +339,9 @@ export default function LedgerPage() {
                       {String(entry.sequence).padStart(3, "0")}
                     </TableCell>
                     <TableCell className="py-3">
-                      <span
-                        className={`inline-flex h-6 items-center rounded-md px-2 text-[11.5px] font-medium ${eventTone(entry.event)}`}
-                      >
+                      <StatusPill tone={eventTone(entry.event)}>
                         {formatEventLabel(entry.event)}
-                      </span>
+                      </StatusPill>
                     </TableCell>
                     <TableCell className="py-3 text-[13.5px] text-ink">{entry.detail}</TableCell>
                     <TableCell className="tabular py-3 font-mono text-[12.5px] text-ink-muted">
@@ -350,7 +356,7 @@ export default function LedgerPage() {
             </TableBody>
           </Table>
         </div>
-      </div>
+      </Card>
 
       <div className="flex flex-wrap items-center justify-between gap-2 text-[12.5px] text-ink-subtle">
         <span>

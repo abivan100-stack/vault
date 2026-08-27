@@ -8,7 +8,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { buildChartPath, statusFor, type Status } from "@/lib/chart";
+import { buildChartPath, clampToCorridor, statusFor, type Status } from "@/lib/chart";
 import {
   appendEntry,
   coveredExcursionSequences,
@@ -135,7 +135,7 @@ function seedReadings(now: Date): Reading[] {
   const readings: Reading[] = [];
   let value = SEED_TEMPERATURE;
   for (let i = READING_WINDOW - 1; i >= 0; i -= 1) {
-    value = nextTemperature(value, randomDrift());
+    value = clampToCorridor(nextTemperature(value, randomDrift()));
     readings.push({
       id: READING_WINDOW - 1 - i,
       at: new Date(now.getTime() - i * SAMPLE_INTERVAL_MS).toISOString(),
