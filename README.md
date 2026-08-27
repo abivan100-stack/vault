@@ -27,6 +27,10 @@ npm run verify      # typecheck + lint + test + build
 
 Individual steps: `npm run typecheck`, `npm run lint`, `npm test`, `npm run build`.
 
+The same four steps run in CI (`.github/workflows/ci.yml`) on every pull request. Lint and
+test are scoped to `src/`, so a git worktree checked out under `.claude/` is not collected
+as part of this project.
+
 ## Routes
 
 | Route              | Purpose                                                             |
@@ -55,11 +59,28 @@ Entries are appended for:
 - an excursion opening or clearing, the moment it happens
 - shipment creation, edits and handoff
 
+A shipment edit records each changed field's before and after, so an edit to the product,
+corridor or route is auditable rather than logged as an update with no value attached.
+
 Each entry commits to `sequence + event + timestamp + detail + prevHash` under **SHA-256**,
-and carries the previous entry's digest. `verifyChain` recomputes every digest and checks
-every link, so editing a stored entry surfaces as **"Chain broken at entry #N"** rather
-than passing silently. The SHA-256 implementation is verified against the FIPS 180-4
-vectors and cross-checked against `node:crypto` in `src/lib/hash.test.ts`.
+and carries the previous entry's digest. The SHA-256 implementation is verified against the
+FIPS 180-4 vectors and cross-checked against `node:crypto` in `src/lib/hash.test.ts`.
+
+`verifyChain` recomputes every digest and checks every link, and reports which way the
+chain failed:
+
+| Verdict            | Meaning                                                        |
+| ------------------ | -------------------------------------------------------------- |
+| `OK`               | Every digest recomputes and every link matches                 |
+| `DIGEST_MISMATCH`  | An entry's contents no longer match its digest -- it was edited |
+| `BROKEN_LINK`      | An entry does not follow the one before it                     |
+| `OUT_OF_ORDER`     | Sequence numbers are not consecutive                           |
+| `BAD_ROOT`         | Sequence 1 does not root at the genesis hash                   |
+| `BAD_SEQUENCE`     | An entry carries a sequence that is not a 1-based integer      |
+
+A chain can also be **incomplete**: intact, but with stored entries that were unreadable on
+load. That is reported separately, because a chain truncated at the tail still verifies and
+would otherwise be presented as sound.
 
 The chain retains the most recent 250 entries.
 
@@ -76,9 +97,29 @@ Stored in `localStorage`, and restored on load:
 
 The chart window is **live only** -- it is rebuilt each session and is not persisted.
 
-Stored values are treated as untrusted: `normalizeFieldLog` and `parseChain` coerce or
-discard anything malformed, and an `ErrorBoundary` offers a "clear local data" recovery
-path if a render still fails.
+Stored values are treated as untrusted. Reads distinguish three states -- **absent**,
+**present** and **unparseable** -- because collapsing them let an unreadable chain be
+replaced with a fresh one that the UI then reported as verified. `normalizeFieldLog` and
+`parseChain` coerce or discard anything malformed and report how much was discarded, and an
+`ErrorBoundary` offers a "clear local data" recovery path if a render still fails.
+
+Anything about to be dropped is copied to a `.corrupt` sibling key (`vault:ledger.corrupt`,
+`vault:fieldLog.corrupt`) before it is overwritten. An audit tool should not destroy the
+record it failed to read.
+
+## Shipment lifecycle
+
+One record at a time, mutated only from `/shipment/manage`. Every action is confirmed and
+written to the ledger.
+
+- **Edit** changes the editable fields and records the before/after of each one.
+- **Reset** restores those fields to their defaults. It deliberately keeps the log id,
+  start time and any recorded handoff -- a field reset must not un-hand-off a shipment or
+  rewrite its identity.
+- **Handoff** is permanent. It stamps `handedOffAt` and appends a `HANDOFF_INIT` entry.
+- **New shipment** issues a fresh box and batch and restarts the chart window. The ledger
+  is append-only, so it carries on with the new shipment recorded as an entry rather than
+  being cleared.
 
 ## Architecture
 
