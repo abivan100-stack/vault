@@ -167,10 +167,9 @@ export type ParsedChain = {
  * rather than presenting a silently shortened chain as intact.
  */
 export function parseChain(raw: unknown): ParsedChain {
-  if (!Array.isArray(raw)) {
-    // A non-array value is only a loss if something was actually stored.
-    return { entries: [], discarded: raw === null || raw === undefined ? 0 : 1 };
-  }
+  // Callers distinguish "nothing was stored" before getting here, so anything
+  // that is not an array is a value someone wrote that is not a chain.
+  if (!Array.isArray(raw)) return { entries: [], discarded: 1 };
 
   const entries: LedgerEntry[] = [];
   let discarded = 0;

@@ -186,14 +186,18 @@ describe("parseChain", () => {
     });
   });
 
-  it("returns an empty chain for absent storage without reporting loss", () => {
-    expect(parseChain(null)).toEqual({ entries: [], discarded: 0 });
-    expect(parseChain(undefined)).toEqual({ entries: [], discarded: 0 });
-  });
-
-  it("reports loss when something was stored but is not a chain", () => {
+  it("treats any non-chain value as a loss", () => {
+    // Absence is decided by the caller before parseChain is reached, so a value
+    // arriving here is one somebody actually wrote — including a stored `null`,
+    // which must not be mistaken for an empty start.
+    expect(parseChain(null)).toEqual({ entries: [], discarded: 1 });
     expect(parseChain("nope")).toEqual({ entries: [], discarded: 1 });
     expect(parseChain({ sequence: 1 })).toEqual({ entries: [], discarded: 1 });
+    expect(parseChain(0)).toEqual({ entries: [], discarded: 1 });
+  });
+
+  it("reports no loss for a genuinely empty stored chain", () => {
+    expect(parseChain([])).toEqual({ entries: [], discarded: 0 });
   });
 
   it("counts malformed entries instead of silently dropping them", () => {

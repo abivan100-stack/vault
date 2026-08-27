@@ -1,200 +1,328 @@
-import { useEffect, useState, useMemo } from "react";
-import anime from "animejs";
-import { BadgeCheck, ArrowRight, Copy, CheckCircle2, FileText, Download, Search, Filter } from "lucide-react";
-import { useColdChain } from "../context/ColdChainContext";
-import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Check, Copy, Download, Search, ShieldAlert, ShieldCheck } from "lucide-react";
+import { useColdChain } from "@/context/ColdChainContext";
 import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  describeVerification,
+  formatEventLabel,
+  type LedgerEntry,
+  type LedgerEventType,
+} from "@/lib/ledger";
+import { shortHash } from "@/lib/hash";
+import { formatClock, formatIsoDate } from "@/lib/simulation";
+import { downloadCsv, toCsv } from "@/lib/csv";
 
-const fullLedgerSeed = [
-  { sequence: "042", event: "TEMPERATURE_READING", time: "14:20:02", status: "VALID", hash: "8f2a9c91d4e6b0c91d", fullHash: "8f2a9c91d4e6b0c91d8f2a9c91d4e6b0c91d" },
-  { sequence: "041", event: "TEMPERATURE_READING", time: "14:10:02", status: "VALID", hash: "2b1180a484f3c0a48", fullHash: "2b1180a484f3c0a482b1180a484f3c0a48" },
-  { sequence: "040", event: "TEMPERATURE_READING", time: "14:00:02", status: "VALID", hash: "b728f0e2a91d4f0e2", fullHash: "b728f0e2a91d4f0e2b728f0e2a91d4f0e2" },
-  { sequence: "039", event: "TEMPERATURE_READING", time: "13:50:02", status: "VALID", hash: "a119c4d8e0f2a119", fullHash: "a119c4d8e0f2a119a119c4d8e0f2a119" },
-  { sequence: "038", event: "EXCURSION_CHECK", time: "13:40:02", status: "VALID", hash: "c44b0a8f1e3c44b", fullHash: "c44b0a8f1e3c44b0c44b0a8f1e3c44b" },
-  { sequence: "037", event: "TEMPERATURE_READING", time: "13:30:02", status: "VALID", hash: "9d2f1b6c8a9d2f1b", fullHash: "9d2f1b6c8a9d2f1b9d2f1b6c8a9d2f1b" },
-  { sequence: "036", event: "HANDOFF_INIT", time: "13:20:02", status: "VALID", hash: "e0f2c4d8a91e0f2c4", fullHash: "e0f2c4d8a91e0f2c4e0f2c4d8a91e0f2c4" },
-  { sequence: "035", event: "TEMPERATURE_READING", time: "13:10:02", status: "VALID", hash: "f1b6c8a9d2f1b6c8", fullHash: "f1b6c8a9d2f1b6c8f1b6c8a9d2f1b6c8" },
-  { sequence: "034", event: "TEMPERATURE_READING", time: "13:00:02", status: "VALID", hash: "7c8a9d2f1b6c7c8a", fullHash: "7c8a9d2f1b6c7c8a7c8a9d2f1b6c7c8a" },
-  { sequence: "033", event: "SHIPMENT_CREATE", time: "12:42:17", status: "VALID", hash: "d4e6b0c91d8f2a9c", fullHash: "d4e6b0c91d8f2a9cd4e6b0c91d8f2a9c" },
+type FilterKey = "all" | "readings" | "excursions" | "shipment";
+
+const FILTERS: { key: FilterKey; label: string; events: readonly LedgerEventType[] | null }[] = [
+  { key: "all", label: "All", events: null },
+  { key: "readings", label: "Readings", events: ["TEMPERATURE_READING"] },
+  { key: "excursions", label: "Excursions", events: ["EXCURSION_OPEN", "EXCURSION_CLEAR"] },
+  {
+    key: "shipment",
+    label: "Shipment",
+    events: ["SHIPMENT_CREATE", "SHIPMENT_UPDATE", "HANDOFF_INIT"],
+  },
 ];
 
+function eventTone(event: LedgerEventType): string {
+  if (event === "EXCURSION_OPEN") return "bg-warning-soft text-warning";
+  if (event === "HANDOFF_INIT" || event === "SHIPMENT_CREATE") return "bg-brand-soft text-brand-ink";
+  return "bg-sunken text-ink-muted";
+}
+
+function HashButton({
+  hash,
+  copiedHash,
+  onCopy,
+}: {
+  hash: string;
+  copiedHash: string | null;
+  onCopy: (hash: string) => void;
+}) {
+  const isCopied = copiedHash === hash;
+  return (
+    <button
+      type="button"
+      onClick={() => onCopy(hash)}
+      title={hash}
+      className="inline-flex h-7 items-center gap-2 rounded-md border border-line px-2 transition-colors hover:bg-sunken"
+      aria-label={isCopied ? "Hash copied" : `Copy full hash ${hash}`}
+    >
+      <span className="tabular font-mono text-[12px] text-ink-muted">{shortHash(hash)}</span>
+      {isCopied ? (
+        <Check size={13} className="text-success" aria-hidden="true" />
+      ) : (
+        <Copy size={13} className="text-ink-subtle" aria-hidden="true" />
+      )}
+    </button>
+  );
+}
+
 export default function LedgerPage() {
-  const { ledgerRows } = useColdChain();
-  const [fullOpen, setFullOpen] = useState(false);
-  const [copied, setCopied] = useState<string | null>(null);
+  const { ledger, chainVerification, discardedEntryCount } = useColdChain();
   const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<"all" | "TEMPERATURE_READING">("all");
+  const [filter, setFilter] = useState<FilterKey>("all");
+  const [copiedHash, setCopiedHash] = useState<string | null>(null);
+  const [fullOpen, setFullOpen] = useState(false);
+  const copyTimerRef = useRef<number | null>(null);
+
+  useEffect(
+    () => () => {
+      if (copyTimerRef.current !== null) window.clearTimeout(copyTimerRef.current);
+    },
+    [],
+  );
+
+  const newestFirst = useMemo(() => [...ledger].reverse(), [ledger]);
 
   const filtered = useMemo(() => {
-    let rows = ledgerRows;
-    if (filter !== "all") rows = rows.filter((r) => r.event === filter);
-    if (query.trim()) {
-      const q = query.toLowerCase();
-      rows = rows.filter((r) => r.sequence.includes(q) || r.event.toLowerCase().includes(q) || r.time.includes(q));
-    }
-    return rows;
-  }, [ledgerRows, query, filter]);
-
-  useEffect(() => {
-    anime
-      .timeline({ easing: "easeOutExpo" })
-      .add({
-        targets: ".ledger-heading h2, .ledger-heading .eyebrow",
-        translateY: [12, 0],
-        opacity: [0, 1],
-        delay: anime.stagger(70),
-        duration: 560,
-      })
-      .add(
-        {
-          targets: "[data-slot='table-row']",
-          translateY: [10, 0],
-          opacity: [0, 1],
-          delay: anime.stagger(60),
-          duration: 480,
-        },
-        "-=320",
+    const active = FILTERS.find((entry) => entry.key === filter);
+    const term = query.trim().toLowerCase();
+    return newestFirst.filter((entry) => {
+      if (active?.events && !active.events.includes(entry.event)) return false;
+      if (!term) return true;
+      return (
+        String(entry.sequence).includes(term) ||
+        entry.event.toLowerCase().includes(term) ||
+        entry.detail.toLowerCase().includes(term) ||
+        entry.hash.toLowerCase().includes(term) ||
+        formatClock(entry.at).includes(term) ||
+        formatIsoDate(entry.at).includes(term)
       );
-    return () => anime.remove(".ledger-heading h2, .ledger-heading .eyebrow, [data-slot='table-row']");
-  }, []);
+    });
+  }, [newestFirst, filter, query]);
 
   const handleCopy = async (hash: string) => {
     try {
       await navigator.clipboard.writeText(hash);
-      setCopied(hash);
-      window.setTimeout(() => setCopied(null), 1400);
+      setCopiedHash(hash);
+      if (copyTimerRef.current !== null) window.clearTimeout(copyTimerRef.current);
+      copyTimerRef.current = window.setTimeout(() => setCopiedHash(null), 1400);
     } catch {
-      // clipboard unavailable — keep the row state unchanged
+      // Clipboard blocked — the full hash is still available via the title.
     }
   };
 
+  const handleExport = () => {
+    const csv = toCsv(
+      ["sequence", "event", "detail", "timestamp", "prev_hash", "hash"],
+      ledger.map((entry) => [
+        String(entry.sequence),
+        entry.event,
+        entry.detail,
+        entry.at,
+        entry.prevHash,
+        entry.hash,
+      ]),
+    );
+    const stamp = ledger.length > 0 ? formatIsoDate(ledger[ledger.length - 1].at) : "empty";
+    downloadCsv(`vault-ledger-${stamp}.csv`, csv);
+  };
+
+  const rows: LedgerEntry[] = filtered.slice(0, 12);
+  const isTrustworthy = chainVerification.intact && discardedEntryCount === 0;
+
   return (
-    <section className="ledger-section space-y-0" id="ledger">
-      <div className="section-heading ledger-heading">
+    <div className="space-y-6">
+      <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <div className="eyebrow">02 / IMMUTABLE TRAIL</div>
-          <h2>Every reading leaves a mark.</h2>
-          <p className="mt-1.5 font-mono text-[12px] leading-[1.5] text-[#5a6a62] dark:text-[#9aa6a1] max-w-[520px]">Append-only ledger — each temperature is hashed and sequenced. Search, copy, or export for audit.</p>
+          <h1 className="text-[21px] font-semibold tracking-[-0.02em] text-ink">Ledger</h1>
+          <p className="mt-1 max-w-[52ch] text-[13.5px] text-ink-muted">
+            Append-only trail. Each entry commits to its own contents and to the previous entry's
+            digest, so any edit breaks verification from that point on.
+          </p>
         </div>
-        <button type="button" onClick={() => setFullOpen(true)} className="text-link inline-flex items-center gap-1.5 font-mono text-[12px] tracking-[0.08em] text-[#1d5d59] dark:text-[#7ec8c1] border-b border-[#267e79] dark:border-[#3aa79f] pb-[5px] hover:text-[#267e79] dark:hover:text-[#3aa79f] transition-colors shrink-0">
-          OPEN FULL LEDGER <ArrowRight size={15} aria-hidden="true" />
+        <Button variant="outline" onClick={handleExport} className="h-9 shrink-0 gap-2 text-sm">
+          <Download size={15} aria-hidden="true" />
+          Export CSV
+        </Button>
+      </header>
+
+      {/* Chain verification — recomputed from the stored entries, not asserted.
+          Entries that were unreadable on load count against integrity too: a
+          shortened chain that verifies is still evidence something rewrote it. */}
+      <div
+        className={`flex items-start gap-3 rounded-lg border p-3.5 ${
+          isTrustworthy ? "border-line bg-raised" : "border-warning/40 bg-warning-soft"
+        }`}
+      >
+        {isTrustworthy ? (
+          <ShieldCheck size={17} className="mt-px shrink-0 text-success" aria-hidden="true" />
+        ) : (
+          <ShieldAlert size={17} className="mt-px shrink-0 text-warning" aria-hidden="true" />
+        )}
+        <div>
+          <p className="text-[13.5px] font-medium text-ink">
+            {chainVerification.intact
+              ? isTrustworthy
+                ? `Chain verified — ${ledger.length} ${ledger.length === 1 ? "entry" : "entries"}`
+                : "Chain incomplete"
+              : `Chain broken at entry #${chainVerification.brokenAt}`}
+          </p>
+          <p className="mt-0.5 text-[13px] text-ink-muted">
+            {describeVerification(chainVerification)}
+          </p>
+          {discardedEntryCount > 0 && (
+            <p className="mt-1 text-[13px] text-warning">
+              {discardedEntryCount} stored{" "}
+              {discardedEntryCount === 1 ? "entry was" : "entries were"} unreadable and had to be
+              dropped on load.
+            </p>
+          )}
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
+        <div className="relative max-w-sm flex-1">
+          <Search
+            size={15}
+            className="pointer-events-none absolute left-2.5 top-1/2 -translate-y-1/2 text-ink-subtle"
+            aria-hidden="true"
+          />
+          <Input
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            placeholder="Search sequence, event, detail or hash"
+            aria-label="Search the ledger"
+            className="h-9 pl-8 text-[13.5px]"
+          />
+        </div>
+
+        <div className="flex h-9 items-center gap-0.5 rounded-lg border border-line bg-sunken p-0.5">
+          {FILTERS.map((entry) => (
+            <button
+              key={entry.key}
+              type="button"
+              onClick={() => setFilter(entry.key)}
+              aria-pressed={filter === entry.key}
+              className={`h-8 rounded-md px-3 text-[13px] font-medium transition-colors ${
+                filter === entry.key
+                  ? "bg-raised text-ink ring-1 ring-line"
+                  : "text-ink-muted hover:text-ink"
+              }`}
+            >
+              {entry.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="overflow-hidden rounded-xl border border-line bg-raised">
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader className="bg-sunken">
+              <TableRow className="hover:bg-transparent">
+                <TableHead className="w-[72px] text-[12px] font-semibold text-ink-muted">Seq</TableHead>
+                <TableHead className="w-[190px] text-[12px] font-semibold text-ink-muted">Event</TableHead>
+                <TableHead className="text-[12px] font-semibold text-ink-muted">Detail</TableHead>
+                <TableHead className="w-[150px] text-[12px] font-semibold text-ink-muted">Recorded</TableHead>
+                <TableHead className="w-[150px] text-right text-[12px] font-semibold text-ink-muted">
+                  Hash
+                </TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {rows.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="py-12 text-center text-[13px] text-ink-muted">
+                    {query.trim() ? `No entries match “${query.trim()}”.` : "No entries yet."}
+                  </TableCell>
+                </TableRow>
+              ) : (
+                rows.map((entry) => (
+                  <TableRow key={entry.hash} className="border-line">
+                    <TableCell className="tabular py-3 font-mono text-[12.5px] font-medium text-ink-subtle">
+                      {String(entry.sequence).padStart(3, "0")}
+                    </TableCell>
+                    <TableCell className="py-3">
+                      <span
+                        className={`inline-flex h-6 items-center rounded-md px-2 text-[11.5px] font-medium ${eventTone(entry.event)}`}
+                      >
+                        {formatEventLabel(entry.event)}
+                      </span>
+                    </TableCell>
+                    <TableCell className="py-3 text-[13.5px] text-ink">{entry.detail}</TableCell>
+                    <TableCell className="tabular py-3 font-mono text-[12.5px] text-ink-muted">
+                      {formatIsoDate(entry.at)} {formatClock(entry.at)}
+                    </TableCell>
+                    <TableCell className="py-3 text-right">
+                      <HashButton hash={entry.hash} copiedHash={copiedHash} onCopy={handleCopy} />
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-2 text-[12.5px] text-ink-subtle">
+        <span>
+          Showing {rows.length} of {filtered.length} matching · {ledger.length} retained
+        </span>
+        <button
+          type="button"
+          onClick={() => setFullOpen(true)}
+          className="font-medium text-brand-ink transition-colors hover:text-brand"
+        >
+          Open full trail
         </button>
       </div>
 
-      {/* Toolbar — makes ledger user-friendly */}
-      <div className="mb-3 flex flex-col sm:flex-row gap-2.5 items-stretch sm:items-center justify-between">
-        <div className="flex items-center gap-2 flex-1 max-w-[420px]">
-          <div className="relative flex-1">
-            <Search size={16} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#9aa6a1]" />
-            <Input placeholder="Search SEQ, event, time…" value={query} onChange={(e) => setQuery(e.target.value)} className="h-8 pl-8 font-mono text-[13px] bg-white dark:bg-[#171c19] border-[#cbd2c6] dark:border-[#2a352f]" />
-          </div>
-          <Button
-            variant={filter === "all" ? "secondary" : "outline"}
-            size="sm"
-            onClick={() => setFilter(filter === "all" ? "TEMPERATURE_READING" : "all")}
-            className="h-8 font-sans text-[14px] font-medium rounded-full gap-1.5 shrink-0"
-          >
-            <Filter size={15} /> {filter === "all" ? "All" : "Temp only"}
-          </Button>
-        </div>
-        <div className="hidden sm:flex items-center gap-2 font-mono text-[11px] text-[#667068] dark:text-[#7a8a84]">
-          <span className="h-1.5 w-1.5 rounded-full bg-[#318b5d] dark:bg-[#5ac18a]" /> {filtered.length} shown • {ledgerRows.length} in view • chain intact
-        </div>
-      </div>
-
-      <div className="rounded-xl border border-[#9ea99e] dark:border-[#2a352f] bg-white dark:bg-[#171c19] overflow-hidden shadow-[0_4px_16px_rgba(23,32,25,0.06)] dark:shadow-[0_8px_24px_rgba(0,0,0,0.24)]">
-        <Table>
-          <TableHeader className="bg-[#f7f8f4] dark:bg-[#1c2220]">
-            <TableRow className="border-b border-[#cbd2c6] dark:border-[#2a352f] hover:bg-transparent">
-              <TableHead className="w-[72px] font-sans text-[13px] font-semibold tracking-[-0.01em] text-[#1d5d59] dark:text-[#7ec8c1]">SEQ</TableHead>
-              <TableHead className="font-sans text-[13px] font-semibold tracking-[-0.01em] text-[#1d5d59] dark:text-[#7ec8c1]">Entry</TableHead>
-              <TableHead className="font-sans text-[13px] font-semibold tracking-[-0.01em] text-[#1d5d59] dark:text-[#7ec8c1]">Timestamp</TableHead>
-              <TableHead className="font-sans text-[13px] font-semibold tracking-[-0.01em] text-[#1d5d59] dark:text-[#7ec8c1]">Status</TableHead>
-              <TableHead className="font-sans text-[13px] font-semibold tracking-[-0.01em] text-[#1d5d59] dark:text-[#7ec8c1] text-right">Hash</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filtered.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={5} className="py-10 text-center font-mono text-[12px] text-[#9aa6a1]">
-                  No entries match “{query}”.
-                </TableCell>
-              </TableRow>
-            ) : (
-              filtered.map((row, index) => (
-                <TableRow key={row.sequence} className="border-b border-[#e6ebe4] dark:border-[#2a352f] hover:bg-[#f7f8f4]/60 dark:hover:bg-[#1c2220]/60 transition-colors group">
-                  <TableCell className="py-3.5 font-mono text-[14px] font-bold tracking-[-0.02em] text-[#267e79] dark:text-[#3aa79f]">{row.sequence}</TableCell>
-                  <TableCell className="py-3.5">
-                    <div className="font-sans text-[15px] font-medium leading-none text-[#172019] dark:text-[#e8e9e3]">{row.event.replace("_", " ")}</div>
-                    <div className="font-mono text-[12px] text-[#7a8a84]">TEMPERATURE_READING</div>
-                  </TableCell>
-                  <TableCell className="py-3.5">
-                    <div className="font-sans text-[14px] font-medium text-[#172019] dark:text-[#e8e9e3]">2026-08-26</div>
-                    <div className="font-mono text-[13px] text-[#5a6a62] dark:text-[#9aa6a1]">{row.time} UTC+05:30</div>
-                  </TableCell>
-                  <TableCell className="py-3.5">
-                    <Badge variant="secondary" className="bg-[#e6f0e9] dark:bg-[#1e2623] text-[#318b5d] dark:text-[#5ac18a] border-[#cbd2c6] dark:border-[#2a352f] font-sans text-[13px] font-medium gap-1.5 px-2.5 py-0 h-6 rounded-full">
-                      <BadgeCheck size={16} className="text-[#318b5d] dark:text-[#5ac18a]" aria-hidden="true" />
-                      {row.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="py-3.5 text-right">
-                    <button onClick={() => handleCopy(index === 0 ? "8f2a9c91d4e6b0c91d" : index === 1 ? "2b1180a484f3c0a48" : "b728f0e2a91d4f0e2")} className="inline-flex items-center gap-2 rounded-full border border-[#e6ebe4] dark:border-[#2a352f] bg-[#fcfdfb] dark:bg-[#0e1210] px-2.5 py-1.5 hover:bg-white dark:hover:bg-[#1e2623] transition-colors group/hash">
-                      <span className="font-mono text-[13px] tracking-[-0.01em] text-[#33413d] dark:text-[#c8d5d0]">{index === 0 ? "8f2a…c91d" : index === 1 ? "2b11…0a48" : "b728…f0e2"}</span>
-                      <span className="hidden sm:inline font-mono text-[12px] text-[#9aa6a1] group-hover/hash:text-[#267e79] dark:group-hover/hash:text-[#3aa79f]">{index === 0 ? "8f2a9c..." : ""}</span>
-                      {copied === (index === 0 ? "8f2a9c91d4e6b0c91d" : index === 1 ? "2b1180a484f3c0a48" : "b728f0e2a91d4f0e2") ? <CheckCircle2 size={16} className="text-[#318b5d] dark:text-[#5ac18a] shrink-0" /> : <Copy size={16} className="text-[#7a8a84] group-hover/hash:text-[#267e79] dark:group-hover/hash:text-[#3aa79f] shrink-0" />}
-                    </button>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </div>
-      <div className="mt-2 flex items-center justify-between font-mono text-[11px] text-[#667068] dark:text-[#7a8a84]">
-        <span>Showing {filtered.length} of {ledgerRows.length} • scroll for more on mobile</span>
-        <span className="hidden sm:inline">Tip: tap hash to copy full value</span>
-      </div>
-
       <Dialog open={fullOpen} onOpenChange={setFullOpen}>
-        <DialogContent className="max-w-[760px] max-h-[84vh] overflow-hidden bg-white dark:bg-[#171c19] p-0 gap-0 border dark:border-[#2a352f]">
-          <DialogHeader className="p-6 pb-4 border-b border-[#e6ebe4] dark:border-[#2a352f]">
-            <DialogTitle className="font-sans text-[15px] font-semibold tracking-[-0.01em] flex items-center gap-2 dark:text-[#e8e9e3]">
-              <FileText size={15} className="text-[#267e79] dark:text-[#3aa79f]" /> Full ledger — 10 entries
+        <DialogContent className="max-h-[86vh] max-w-[820px] gap-0 overflow-hidden p-0">
+          <DialogHeader className="border-b border-line p-5">
+            <DialogTitle className="text-[15px] font-semibold tracking-[-0.01em]">
+              Full trail — {filtered.length} {filtered.length === 1 ? "entry" : "entries"}
             </DialogTitle>
-            <DialogDescription className="font-mono text-[12px] text-[#5a6a62] dark:text-[#9aa6a1]">Verified, append-only. Search and copy full hash. Export for audit.</DialogDescription>
+            <DialogDescription className="text-[13px] text-ink-muted">
+              Matching the current search and filter. Click a hash to copy it in full.
+            </DialogDescription>
           </DialogHeader>
 
-          <div className="overflow-auto max-h-[54vh]">
+          <div className="max-h-[58vh] overflow-auto">
             <Table>
-              <TableHeader className="sticky top-0 bg-[#f7f8f4] dark:bg-[#1c2220] z-10">
-                <TableRow className="hover:bg-transparent border-b dark:border-[#2a352f]">
-                  <TableHead className="font-sans text-[13px] dark:text-[#9aa6a1]">SEQ</TableHead>
-                  <TableHead className="font-sans text-[13px] dark:text-[#9aa6a1]">Entry</TableHead>
-                  <TableHead className="font-sans text-[13px] dark:text-[#9aa6a1]">Timestamp</TableHead>
-                  <TableHead className="font-sans text-[13px] dark:text-[#9aa6a1]">Status</TableHead>
-                  <TableHead className="font-sans text-[13px] dark:text-[#9aa6a1] text-right">Hash</TableHead>
+              <TableHeader className="sticky top-0 z-10 bg-sunken">
+                <TableRow className="hover:bg-transparent">
+                  <TableHead className="w-[64px] text-[12px] text-ink-muted">Seq</TableHead>
+                  <TableHead className="w-[170px] text-[12px] text-ink-muted">Event</TableHead>
+                  <TableHead className="text-[12px] text-ink-muted">Detail</TableHead>
+                  <TableHead className="w-[140px] text-[12px] text-ink-muted">Recorded</TableHead>
+                  <TableHead className="w-[140px] text-right text-[12px] text-ink-muted">Hash</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {fullLedgerSeed.map((row) => (
-                  <TableRow key={row.sequence} className="hover:bg-[#f7f8f4]/60 dark:hover:bg-[#1c2220]/60 border-b dark:border-[#2a352f]">
-                    <TableCell className="font-mono text-[13px] font-bold text-[#267e79] dark:text-[#3aa79f] py-3">{row.sequence}</TableCell>
-                    <TableCell className="font-sans text-[14px] font-medium dark:text-[#e8e9e3] py-3">{row.event}</TableCell>
-                    <TableCell className="font-mono text-[13px] text-muted-foreground dark:text-[#9aa6a1] py-3">2026-08-26 / {row.time}</TableCell>
-                    <TableCell className="py-3">
-                      <Badge variant="secondary" className="bg-[#e6f0e9] dark:bg-[#1e2623] text-[#318b5d] dark:text-[#5ac18a] border dark:border-[#2a352f] text-[13px] gap-1 rounded-full">
-                        <BadgeCheck size={15} /> {row.status}
-                      </Badge>
+                {filtered.map((entry) => (
+                  <TableRow key={entry.hash} className="border-line">
+                    <TableCell className="tabular py-2.5 font-mono text-[12.5px] text-ink-subtle">
+                      {String(entry.sequence).padStart(3, "0")}
                     </TableCell>
-                    <TableCell className="py-3 text-right">
-                      <button onClick={() => handleCopy(row.fullHash)} className="inline-flex items-center gap-2 rounded-full border border-[#e6ebe4] dark:border-[#2a352f] bg-[#fcfdfb] dark:bg-[#0e1210] px-3 py-1.5 hover:bg-white dark:hover:bg-[#1e2623] transition-colors">
-                        <span className="font-mono text-[13px] tracking-[-0.01em] truncate max-w-[120px]">{row.hash.slice(0, 8)}…{row.hash.slice(-4)}</span>
-                        {copied === row.fullHash ? <CheckCircle2 size={15} className="text-[#318b5d] dark:text-[#5ac18a] shrink-0" /> : <Copy size={15} className="text-[#667068] dark:text-[#7a8a84] shrink-0" />}
-                      </button>
+                    <TableCell className="py-2.5 text-[13px] text-ink">
+                      {formatEventLabel(entry.event)}
+                    </TableCell>
+                    <TableCell className="py-2.5 text-[13px] text-ink-muted">{entry.detail}</TableCell>
+                    <TableCell className="tabular py-2.5 font-mono text-[12px] text-ink-muted">
+                      {formatIsoDate(entry.at)} {formatClock(entry.at)}
+                    </TableCell>
+                    <TableCell className="py-2.5 text-right">
+                      <HashButton hash={entry.hash} copiedHash={copiedHash} onCopy={handleCopy} />
                     </TableCell>
                   </TableRow>
                 ))}
@@ -202,37 +330,26 @@ export default function LedgerPage() {
             </Table>
           </div>
 
-          <div className="p-4 border-t border-[#e6ebe4] dark:border-[#2a352f] bg-[#fcfdfb] dark:bg-[#1c2220] flex items-center justify-between gap-3">
-            <div className="font-mono text-[11px] text-[#5a6a62] dark:text-[#9aa6a1]">{fullLedgerSeed.length} entries • verified • chain intact • dark & light ready</div>
+          <div className="flex items-center justify-between gap-3 border-t border-line p-4">
+            <span className="text-[12.5px] text-ink-subtle">
+              {isTrustworthy
+                ? "Chain verified"
+                : chainVerification.intact
+                  ? "Chain incomplete"
+                  : `Broken at #${chainVerification.brokenAt}`}
+            </span>
             <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={() => setFullOpen(false)} className="font-sans text-[14px] font-medium rounded-full px-5 h-8">
+              <Button variant="outline" onClick={() => setFullOpen(false)} className="h-9 text-sm">
                 Close
               </Button>
-              <Button
-                size="sm"
-                className="bg-[#267e79] hover:bg-[#1d5d59] text-white font-sans text-[14px] font-medium rounded-full px-5 h-8 gap-1.5"
-                onClick={async () => {
-                  const csv = `SEQ,ENTRY TYPE,TIMESTAMP,STATUS,HASH\n${fullLedgerSeed.map((r) => `${r.sequence},${r.event},2026-08-26 ${r.time},${r.status},${r.fullHash}`).join("\n")}`;
-                  const blob = new Blob([csv], { type: "text/csv" });
-                  const url = URL.createObjectURL(blob);
-                  const a = document.createElement("a");
-                  a.href = url;
-                  a.download = "vault-ledger-2026-08-26.csv";
-                  a.click();
-                  URL.revokeObjectURL(url);
-                }}
-              >
-                <Download size={16} /> Export CSV
+              <Button onClick={handleExport} className="h-9 gap-2 text-sm">
+                <Download size={15} aria-hidden="true" />
+                Export CSV
               </Button>
             </div>
           </div>
-          {copied && (
-            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 bg-[#172019] dark:bg-[#0e1210] text-white text-[13px] font-sans px-3.5 py-2 rounded-full flex items-center gap-2 shadow-lg border dark:border-[#2a352f]">
-              <CheckCircle2 size={16} className="text-[#7ec8a1]" /> Copied {copied.slice(0, 8)}…
-            </div>
-          )}
         </DialogContent>
       </Dialog>
-    </section>
+    </div>
   );
 }

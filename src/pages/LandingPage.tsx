@@ -1,133 +1,166 @@
-import { Link, useNavigate } from "react-router-dom";
-import { Shield, Activity, Database, Package, ArrowRight, CheckCircle2, Thermometer, Clock3, Settings2 } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Activity, ArrowRight, Database, Package } from "lucide-react";
+import { useColdChain } from "@/context/ColdChainContext";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
+import { SAFE_MAX_C, SAFE_MIN_C } from "@/lib/chart";
+import { LEDGER_INTERVAL_MS, SAMPLE_INTERVAL_MS, formatClock } from "@/lib/simulation";
 
 export default function LandingPage() {
   const navigate = useNavigate();
-  return (
-    <div className="space-y-0">
-      {/* Clean hero — no flashy orbit, no 104px hype */}
-      <section className="pt-10 pb-12">
-        <div className="inline-flex items-center gap-2 rounded-full border border-[#cbd2c6] dark:border-[#2a352f] bg-white dark:bg-[#171c19] px-3 py-1.5 shadow-sm">
-          <span className="h-1.5 w-1.5 rounded-full bg-[#318b5d] dark:bg-[#5ac18a] animate-pulse" />
-          <span className="font-mono text-[11px] tracking-[0.12em] font-bold text-[#1d5d59] dark:text-[#7ec8c1]">COLD-CHAIN • VAULT 01</span>
-          <span className="hidden sm:inline font-mono text-[10px] text-[#667068] dark:text-[#7a8a84]">• local simulation • no sensor needed</span>
-        </div>
+  // The preview reflects real state. A hardcoded snapshot would contradict the
+  // console one click away.
+  const { temperature, status, ledger, chainVerification, discardedEntryCount, fieldLogMeta, lastSyncAt } =
+    useColdChain();
 
-        <div className="mt-6 grid gap-8 lg:grid-cols-[1.15fr_0.85fr] items-start">
-          <div>
-            <h1 className="font-semibold tracking-[-0.06em] leading-[0.92] text-[42px] sm:text-[48px] lg:text-[52px] text-[#172019] dark:text-[#e8e9e3]">
-              Cold-chain
-              <br />
-              <span className="text-[#267e79] dark:text-[#3aa79f]">integrity,</span> made
-              <br />
-              visible.
-            </h1>
-            <p className="mt-4 max-w-[520px] text-[16px] leading-[1.6] text-[#4f5a52] dark:text-[#a8b8b0]">
-              Vault records every dose’s journey — temperature, time and trust — from loading bay to last-mile handoff. Simulation runs locally, data persists, ledger is verifiable.
-            </p>
-            <div className="mt-6 flex flex-wrap gap-3">
-              <Button className="bg-[#267e79] hover:bg-[#1d5d59] text-white font-sans text-[15px] font-medium tracking-[-0.01em] h-10 px-6 gap-2 rounded-full shadow-[0_4px_14px_rgba(38,126,121,0.22)] border border-[#267e79] dark:border-[#3aa79f] dark:bg-[#3aa79f] dark:hover:bg-[#2e9e98] dark:text-[#0e1210]" onClick={() => navigate("/monitor")}>
-                <span>Open monitor</span> <ArrowRight size={16} strokeWidth={2} />
-              </Button>
-              <Button variant="outline" className="font-sans text-[15px] font-medium tracking-[-0.01em] h-10 px-6 gap-2 rounded-full border-[1.5px] border-[#267e79] dark:border-[#3aa79f] text-[#1d5d59] dark:text-[#7ec8c1] hover:bg-[#e6f0e9] dark:hover:bg-[#1e2623] bg-white dark:bg-transparent shadow-sm" onClick={() => navigate("/shipment")}>
-                <Package size={16} strokeWidth={2} /> View shipment
-              </Button>
-            </div>
-            <div className="mt-6 flex flex-wrap items-center gap-3 font-mono text-[11px] text-[#667068] dark:text-[#7a8a84]">
-              <span className="inline-flex items-center gap-1.5">
-                <CheckCircle2 size={13} className="text-[#318b5d] dark:text-[#5ac18a]" /> 2–8°C corridor
-              </span>
-              <span>•</span>
-              <span className="inline-flex items-center gap-1.5">
-                <Clock3 size={13} /> 2s sampling
-              </span>
-              <span>•</span>
-              <span className="inline-flex items-center gap-1.5">
-                <Database size={13} /> Immutable ledger
-              </span>
-            </div>
+  // Same gate as the Ledger page: a chain whose tail was dropped still
+  // verifies, so intact alone would report VERIFIED over known data loss.
+  const isTrustworthy = chainVerification.intact && discardedEntryCount === 0;
+
+  const latestEntry = ledger.length > 0 ? ledger[ledger.length - 1] : null;
+  const isSafe = status === "SAFE";
+
+  return (
+    <div className="space-y-10">
+      <section className="grid gap-10 pt-4 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
+        <div>
+          <p className="eyebrow">Cold-chain integrity console</p>
+          <h1 className="mt-3 max-w-[16ch] text-[34px] font-semibold leading-[1.1] tracking-[-0.03em] text-ink sm:text-[40px]">
+            Proof the cold chain held.
+          </h1>
+          <p className="mt-4 max-w-[54ch] text-[15px] leading-relaxed text-ink-muted">
+            Vault watches one shipment's {SAFE_MIN_C}–{SAFE_MAX_C} °C corridor, commits the
+            reading to a hash-chained ledger every {LEDGER_INTERVAL_MS / 1000} seconds, and keeps
+            the box, batch and route in one record — from loading bay to handoff.
+          </p>
+
+          <div className="mt-6 flex flex-wrap gap-2.5">
+            <Button onClick={() => navigate("/monitor")} className="h-10 gap-2 px-5 text-sm">
+              Open monitor
+              <ArrowRight size={15} aria-hidden="true" />
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => navigate("/shipment")}
+              className="h-10 gap-2 px-5 text-sm"
+            >
+              <Package size={15} aria-hidden="true" />
+              View shipment
+            </Button>
           </div>
 
-          <Card className="overflow-hidden border-[#cbd2c6] dark:border-[#2a352f] bg-white dark:bg-[#171c19] shadow-[0_12px_32px_rgba(23,32,25,0.08)] dark:shadow-[0_12px_32px_rgba(0,0,0,0.28)]">
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="font-mono text-[12px] tracking-[0.14em] flex items-center gap-2">
-                  <Shield size={15} className="text-[#267e79] dark:text-[#3aa79f]" /> VAULT PREVIEW
-                </CardTitle>
-                <Badge variant="secondary" className="bg-[#e6f0e9] dark:bg-[#1e2623] text-[#318b5d] dark:text-[#5ac18a] border text-[10px]">LIVE SIMULATION</Badge>
-              </div>
-              <CardDescription className="font-mono text-[12px]">What you’ll see inside — no flashy orbit, just the essentials.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="grid grid-cols-3 gap-2">
-                <div className="rounded-lg border border-[#e6ebe4] dark:border-[#2a352f] bg-[#f7f8f4] dark:bg-[#1c2220] p-3 text-center">
-                  <Thermometer size={16} className="mx-auto text-[#267e79] dark:text-[#3aa79f]" />
-                  <div className="mt-1.5 font-mono text-[11px] font-bold">MONITOR</div>
-                  <div className="font-mono text-[10px] text-[#5a6a62] dark:text-[#9aa6a1]">4.4°C • SAFE</div>
-                </div>
-                <div className="rounded-lg border border-[#e6ebe4] dark:border-[#2a352f] bg-[#f7f8f4] dark:bg-[#1c2220] p-3 text-center">
-                  <Database size={16} className="mx-auto text-[#267e79] dark:text-[#3aa79f]" />
-                  <div className="mt-1.5 font-mono text-[11px] font-bold">LEDGER</div>
-                  <div className="font-mono text-[10px] text-[#5a6a62] dark:text-[#9aa6a1]">042 • VALID</div>
-                </div>
-                <div className="rounded-lg border border-[#e6ebe4] dark:border-[#2a352f] bg-[#f7f8f4] dark:bg-[#1c2220] p-3 text-center">
-                  <Package size={16} className="mx-auto text-[#267e79] dark:text-[#3aa79f]" />
-                  <div className="mt-1.5 font-mono text-[11px] font-bold">SHIPMENT</div>
-                  <div className="font-mono text-[10px] text-[#5a6a62] dark:text-[#9aa6a1]">VCC-BOX-001</div>
-                </div>
-              </div>
-              <Separator />
-              <div className="flex items-center justify-between font-mono text-[11px]">
-                <span className="text-[#5a6a62] dark:text-[#9aa6a1]">02.0 — 08.0 °C • 250 units</span>
-                <Link to="/shipment" className="inline-flex items-center gap-1 text-[#1d5d59] dark:text-[#7ec8c1] hover:underline">
-                  Open shipment <ArrowRight size={13} />
-                </Link>
-              </div>
-            </CardContent>
-          </Card>
+          <p className="mt-6 text-[12.5px] text-ink-subtle">
+            Runs entirely in this browser. No sensor, no backend, no account.
+          </p>
+        </div>
+
+        {/* Live preview */}
+        <div className="rounded-xl border border-line bg-raised">
+          <div className="flex items-center justify-between border-b border-line px-5 py-3.5">
+            <span className="eyebrow">Right now</span>
+            <span className="tabular font-mono text-[11.5px] text-ink-subtle">
+              {lastSyncAt ? formatClock(lastSyncAt) : "—"}
+            </span>
+          </div>
+
+          <dl className="divide-y divide-line">
+            <div className="flex items-center justify-between gap-4 px-5 py-4">
+              <dt className="flex items-center gap-2 text-[13.5px] text-ink-muted">
+                <Activity size={15} className="text-ink-subtle" aria-hidden="true" />
+                Temperature
+              </dt>
+              <dd className="flex items-center gap-2">
+                <span
+                  className={`tabular font-mono text-[15px] font-semibold ${
+                    isSafe ? "text-ink" : "text-warning"
+                  }`}
+                >
+                  {temperature.toFixed(1)} °C
+                </span>
+                <span
+                  className={`inline-flex h-5 items-center rounded px-1.5 text-[11px] font-semibold ${
+                    isSafe ? "bg-success-soft text-success" : "bg-warning-soft text-warning"
+                  }`}
+                >
+                  {status}
+                </span>
+              </dd>
+            </div>
+
+            <div className="flex items-center justify-between gap-4 px-5 py-4">
+              <dt className="flex items-center gap-2 text-[13.5px] text-ink-muted">
+                <Database size={15} className="text-ink-subtle" aria-hidden="true" />
+                Ledger
+              </dt>
+              <dd className="flex items-center gap-2">
+                <span className="tabular font-mono text-[13px] text-ink">
+                  {latestEntry ? `#${String(latestEntry.sequence).padStart(3, "0")}` : "—"}
+                </span>
+                <span
+                  className={`inline-flex h-5 items-center rounded px-1.5 text-[11px] font-semibold ${
+                    isTrustworthy ? "bg-success-soft text-success" : "bg-warning-soft text-warning"
+                  }`}
+                >
+                  {isTrustworthy ? "VERIFIED" : chainVerification.intact ? "INCOMPLETE" : "BROKEN"}
+                </span>
+              </dd>
+            </div>
+
+            <div className="flex items-center justify-between gap-4 px-5 py-4">
+              <dt className="flex items-center gap-2 text-[13.5px] text-ink-muted">
+                <Package size={15} className="text-ink-subtle" aria-hidden="true" />
+                Shipment
+              </dt>
+              <dd
+                className="tabular min-w-0 truncate font-mono text-[13px] text-ink"
+                title={`${fieldLogMeta.box} · ${fieldLogMeta.batch}`}
+              >
+                {fieldLogMeta.box}
+                <span className="text-ink-subtle"> · {fieldLogMeta.batch}</span>
+              </dd>
+            </div>
+          </dl>
+
+          <div className="border-t border-line px-5 py-3.5">
+            <button
+              type="button"
+              onClick={() => navigate("/ledger")}
+              className="inline-flex items-center gap-1.5 text-[13px] font-medium text-brand-ink transition-colors hover:text-brand"
+            >
+              Open the ledger
+              <ArrowRight size={14} aria-hidden="true" />
+            </button>
+          </div>
         </div>
       </section>
 
-      <section className="border-t border-[#cbd2c6] dark:border-[#2a352f] py-10">
-        <div className="eyebrow">WHY VAULT</div>
-        <div className="mt-3 grid gap-4 md:grid-cols-3">
-          <Card className="border-[#cbd2c6] dark:border-[#2a352f] bg-white dark:bg-[#171c19]">
-            <CardHeader className="pb-2">
-              <Activity size={16} className="text-[#267e79] dark:text-[#3aa79f]" />
-              <CardTitle className="font-mono text-[12px] tracking-[0.12em] mt-2">LIVE MONITORING</CardTitle>
-            </CardHeader>
-            <CardContent className="font-mono text-[12px] leading-[1.6] text-[#5a6a62] dark:text-[#9aa6a1]">Hover the graph for precise °C, see SAFE/EXCURSION instantly, pause simulation anytime.</CardContent>
-          </Card>
-          <Card className="border-[#cbd2c6] dark:border-[#2a352f] bg-white dark:bg-[#171c19]">
-            <CardHeader className="pb-2">
-              <Database size={16} className="text-[#267e79] dark:text-[#3aa79f]" />
-              <CardTitle className="font-mono text-[12px] tracking-[0.12em] mt-2">IMMUTABLE TRAIL</CardTitle>
-            </CardHeader>
-            <CardContent className="font-mono text-[12px] leading-[1.6] text-[#5a6a62] dark:text-[#9aa6a1]">Every reading is hashed and sequenced. Copy full hash, export CSV for audit.</CardContent>
-          </Card>
-          <Card className="border-[#cbd2c6] dark:border-[#2a352f] bg-white dark:bg-[#171c19]">
-            <CardHeader className="pb-2">
-              <Package size={16} className="text-[#267e79] dark:text-[#3aa79f]" />
-              <CardTitle className="font-mono text-[12px] tracking-[0.12em] mt-2">SHIPMENT TRUTH</CardTitle>
-            </CardHeader>
-            <CardContent className="font-mono text-[12px] leading-[1.6] text-[#5a6a62] dark:text-[#9aa6a1]">Box, batch, route and doses — editable in a dedicated workspace, not cluttering the display. Persisted locally.</CardContent>
-          </Card>
-        </div>
-      </section>
-
-      <section className="border-t border-[#cbd2c6] dark:border-[#2a352f] py-8 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div className="font-mono text-[12px] text-[#5a6a62] dark:text-[#9aa6a1]">First impression should be calm, not flashy. No rotating rings — just clarity.</div>
-        <div className="flex gap-2.5">
-          <Button variant="outline" className="font-sans text-[15px] font-medium tracking-[-0.01em] h-10 px-6 gap-1.5 rounded-full border-[1.5px] border-[#cbd2c6] dark:border-[#2a352f] bg-white dark:bg-[#1c2220] hover:bg-[#f7f8f4] dark:hover:bg-[#1e2623] shadow-sm" onClick={() => navigate("/ledger")}>
-            View ledger
-          </Button>
-          <Button className="bg-[#172019] dark:bg-[#e8e9e3] dark:text-[#0e1210] hover:bg-black dark:hover:bg-[#c8d5d0] font-sans text-[15px] font-medium tracking-[-0.01em] h-10 px-6 gap-1.5 rounded-full shadow-sm border border-transparent dark:border-[#2a352f]" onClick={() => navigate("/shipment/manage")}>
-            <Settings2 size={16} strokeWidth={2} /> Manage shipment
-          </Button>
+      <section className="border-t border-line pt-8">
+        <h2 className="eyebrow">What it does</h2>
+        <div className="mt-4 grid gap-4 md:grid-cols-3">
+          {[
+            {
+              icon: Activity,
+              title: "Watches the corridor",
+              body: `A reading every ${SAMPLE_INTERVAL_MS / 1000} seconds, plotted against the ${SAFE_MIN_C}–${SAFE_MAX_C} °C limits with headroom either side so excursions are visible rather than clamped to the edge.`,
+            },
+            {
+              icon: Database,
+              title: "Records the evidence",
+              body: `The reading every ${LEDGER_INTERVAL_MS / 1000} seconds, plus every excursion, edit and handoff as it happens. Verification recomputes each digest, so an edited entry shows up as a broken chain.`,
+            },
+            {
+              icon: Package,
+              title: "Keeps one record",
+              body: "Box, batch, product, doses and route live in a single shipment record, editable in a dedicated workspace and saved to this browser.",
+            },
+          ].map((item) => (
+            <article key={item.title} className="rounded-xl border border-line bg-raised p-5">
+              <item.icon size={16} className="text-ink-subtle" aria-hidden="true" />
+              <h3 className="mt-3 text-[14px] font-semibold tracking-[-0.01em] text-ink">
+                {item.title}
+              </h3>
+              <p className="mt-1.5 text-[13.5px] leading-relaxed text-ink-muted">{item.body}</p>
+            </article>
+          ))}
         </div>
       </section>
     </div>

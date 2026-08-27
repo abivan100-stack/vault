@@ -1,280 +1,553 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import anime from "animejs";
-import { NavLink, Outlet, Link, useLocation, useNavigate } from "react-router-dom";
-import { Shield, HelpCircle, Activity, Database, Package, Sun, Moon, Search, Bell, ChevronDown, Command } from "lucide-react";
-import { ColdChainProvider } from "./context/ColdChainContext";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
+import {
+  Activity,
+  Bell,
+  ChevronDown,
+  CircleHelp,
+  Database,
+  Moon,
+  Package,
+  Search,
+  Sun,
+  Truck,
+  TriangleAlert,
+  ShieldCheck,
+} from "lucide-react";
+import { ColdChainProvider, useColdChain } from "@/context/ColdChainContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import LoadingScreen from "./components/LoadingScreen";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import LoadingScreen from "@/components/LoadingScreen";
+import { formatClock } from "@/lib/simulation";
+import { formatEventLabel, type LedgerEntry } from "@/lib/ledger";
+import { SAFE_MAX_C, SAFE_MIN_C } from "@/lib/chart";
+import { prefersReducedMotion } from "@/lib/motion";
 
-function Layout({ isDark, toggleDark }: { isDark: boolean; toggleDark: () => void }) {
-  const location = useLocation();
+/**
+ * The prototype has no authentication. The operator block is clearly labelled
+ * as demo data so it is never mistaken for a signed-in user.
+ */
+const DEMO_OPERATOR = {
+  initials: "RK",
+  name: "Raghav K.",
+  role: "Demo operator",
+} as const;
+
+const NAV_ITEMS = [
+  { to: "/monitor", label: "Monitor", icon: Activity },
+  { to: "/ledger", label: "Ledger", icon: Database },
+  { to: "/shipment", label: "Shipment", icon: Package },
+] as const;
+
+const PAGE_CONTAINER = "mx-auto w-full max-w-[1180px] px-5 sm:px-8";
+
+function navLinkClass({ isActive }: { isActive: boolean }): string {
+  const base =
+    "inline-flex h-8 items-center gap-2 rounded-md px-3.5 text-[13.5px] font-medium transition-colors";
+  return isActive
+    ? `${base} bg-raised text-ink ring-1 ring-line`
+    : `${base} text-ink-muted hover:text-ink`;
+}
+
+function mobileNavLinkClass({ isActive }: { isActive: boolean }): string {
+  const base =
+    "inline-flex h-8 flex-1 items-center justify-center gap-2 rounded-md text-[13.5px] font-medium transition-colors";
+  return isActive
+    ? `${base} bg-raised text-ink ring-1 ring-line`
+    : `${base} text-ink-muted hover:text-ink`;
+}
+
+function notificationIcon(event: LedgerEntry["event"]) {
+  if (event === "EXCURSION_OPEN") return TriangleAlert;
+  if (event === "HANDOFF_INIT") return Truck;
+  return ShieldCheck;
+}
+
+function NotificationsDialog({
+  open,
+  onOpenChange,
+  entries,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  entries: LedgerEntry[];
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-[460px] gap-0 overflow-hidden p-0">
+        <DialogHeader className="border-b border-line p-5">
+          <DialogTitle className="text-[15px] font-semibold tracking-[-0.01em]">
+            Notifications
+          </DialogTitle>
+          <DialogDescription className="text-[13px] text-ink-muted">
+            Corridor and handoff events, taken straight from the ledger.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="max-h-[52vh] overflow-auto">
+          {entries.length === 0 ? (
+            <p className="p-5 text-[13px] text-ink-muted">
+              Nothing yet. Excursions and handoffs will appear here as they are recorded.
+            </p>
+          ) : (
+            <ul className="divide-y divide-line">
+              {entries.map((entry) => {
+                const Icon = notificationIcon(entry.event);
+                const isAlert = entry.event === "EXCURSION_OPEN";
+                return (
+                  <li key={entry.hash} className="flex items-start gap-3 p-4">
+                    <span
+                      className={`mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-md ${
+                        isAlert ? "bg-warning-soft text-warning" : "bg-success-soft text-success"
+                      }`}
+                    >
+                      <Icon size={15} aria-hidden="true" />
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-[13.5px] font-medium text-ink">
+                        {formatEventLabel(entry.event)}
+                      </p>
+                      <p className="mt-0.5 text-[13px] leading-snug text-ink-muted">
+                        {entry.detail}
+                      </p>
+                      <p className="tabular mt-1 font-mono text-[11.5px] text-ink-subtle">
+                        #{entry.sequence} · {formatClock(entry.at)}
+                      </p>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function HelpDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[86vh] max-w-[540px] gap-0 overflow-hidden p-0">
+        <DialogHeader className="border-b border-line p-5">
+          <DialogTitle className="text-[15px] font-semibold tracking-[-0.01em]">
+            How Vault works
+          </DialogTitle>
+          <DialogDescription className="text-[13px] text-ink-muted">
+            A local simulation — no sensor is attached and nothing leaves this browser.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="max-h-[58vh] space-y-5 overflow-auto p-5">
+          <section>
+            <h3 className="text-[13px] font-semibold text-ink">The simulation</h3>
+            <p className="mt-1.5 text-[13.5px] leading-relaxed text-ink-muted">
+              A temperature is generated every 2 seconds inside the {SAFE_MIN_C}–{SAFE_MAX_C} °C
+              corridor, with one degree of headroom either side so excursions can be exercised.
+              Status flips to <span className="font-medium text-ink">EXCURSION</span> the moment a
+              reading leaves the corridor.
+            </p>
+          </section>
+
+          <section>
+            <h3 className="text-[13px] font-semibold text-ink">The ledger</h3>
+            <p className="mt-1.5 text-[13.5px] leading-relaxed text-ink-muted">
+              Every 10 seconds the current reading is appended to a hash-chained ledger, as are
+              shipment edits, excursions and handoffs. Each entry commits to its own contents and to
+              the previous entry's digest, so the Ledger page can show whether any retained entry
+              has been edited, removed or reordered. It is tamper evidence, not tamper proofing:
+              the chain lives in this browser's storage with nothing signing it, so anyone able to
+              write that storage could replace it wholesale.
+            </p>
+          </section>
+
+          <section>
+            <h3 className="text-[13px] font-semibold text-ink">What persists</h3>
+            <ul className="mt-1.5 space-y-1.5 text-[13.5px] leading-relaxed text-ink-muted">
+              <li>
+                Shipment record and ledger are saved to <code className="font-mono text-[12.5px]">localStorage</code>
+                and survive a reload.
+              </li>
+              <li>The chart window is live only — it restarts with the session.</li>
+              <li>Theme preference is remembered.</li>
+            </ul>
+          </section>
+
+          <section>
+            <h3 className="text-[13px] font-semibold text-ink">Shortcuts</h3>
+            <p className="mt-1.5 text-[13.5px] leading-relaxed text-ink-muted">
+              <kbd className="rounded border border-line bg-sunken px-1.5 py-0.5 font-mono text-[12px]">
+                ⌘K
+              </kbd>{" "}
+              or{" "}
+              <kbd className="rounded border border-line bg-sunken px-1.5 py-0.5 font-mono text-[12px]">
+                Ctrl K
+              </kbd>{" "}
+              opens the command palette. Shipment edits live under Shipment → Manage.
+            </p>
+          </section>
+        </div>
+
+        <div className="flex justify-end border-t border-line p-4">
+          <Button onClick={() => onOpenChange(false)} className="h-9 px-5 text-sm">
+            Got it
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function CommandPalette({
+  open,
+  onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
   const navigate = useNavigate();
-  const [helpOpen, setHelpOpen] = useState(false);
-  const [cmdOpen, setCmdOpen] = useState(false);
+  const [query, setQuery] = useState("");
 
-  useEffect(() => {
-    anime({ targets: ".topbar", translateY: [-10, 0], opacity: [0, 1], duration: 480, easing: "easeOutExpo" });
-    anime({ targets: ".brand, .topnav a, .topbar-actions > *", translateY: [-6, 0], opacity: [0, 1], delay: anime.stagger(35), duration: 480, easing: "easeOutExpo" });
-  }, []);
+  const commands = useMemo(
+    () => [
+      { label: "Go to Monitor", path: "/monitor", icon: Activity, keywords: "monitor temperature chart live" },
+      { label: "Open Ledger", path: "/ledger", icon: Database, keywords: "ledger hash audit trail export" },
+      { label: "Shipment overview", path: "/shipment", icon: Package, keywords: "shipment box batch route" },
+      { label: "Manage shipment", path: "/shipment/manage", icon: Truck, keywords: "edit handoff new reset manage" },
+    ],
+    [],
+  );
 
-  useEffect(() => {
-    anime({ targets: ".page-wrap > div, .page-wrap > section", translateY: [8, 0], opacity: [0, 1], duration: 420, easing: "easeOutExpo" });
-  }, [location.pathname]);
+  const matches = useMemo(() => {
+    const term = query.trim().toLowerCase();
+    if (!term) return commands;
+    return commands.filter(
+      (command) =>
+        command.label.toLowerCase().includes(term) || command.keywords.includes(term),
+    );
+  }, [commands, query]);
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
-        e.preventDefault();
-        setCmdOpen((v) => !v);
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
+  const go = useCallback(
+    (path: string) => {
+      navigate(path);
+      onOpenChange(false);
+      setQuery("");
+    },
+    [navigate, onOpenChange],
+  );
 
   return (
-    <div className="vault-app min-h-screen bg-[#f3f4ed] dark:bg-[#0e1210]">
-      {/* Production SaaS header — not amateur */}
-      <header className="topbar sticky top-0 z-40 border-b border-[#e6ebe4] dark:border-[#1e2623] bg-white/90 dark:bg-[#0f1412]/90 backdrop-blur-xl supports-[backdrop-filter]:bg-white/80 dark:supports-[backdrop-filter]:bg-[#0f1412]/80">
-        <div className="mx-auto max-w-[1420px] w-full px-4 sm:px-6 lg:px-[72px] h-[60px] flex items-center gap-4 lg:gap-6">
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        onOpenChange(next);
+        if (!next) setQuery("");
+      }}
+    >
+      <DialogContent className="max-w-[520px] gap-0 overflow-hidden p-0">
+        <DialogHeader className="sr-only">
+          <DialogTitle>Command palette</DialogTitle>
+          <DialogDescription>Search and jump to a page.</DialogDescription>
+        </DialogHeader>
+
+        <div className="flex items-center gap-2 border-b border-line px-3">
+          <Search size={16} className="shrink-0 text-ink-subtle" aria-hidden="true" />
+          <Input
+            autoFocus
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && matches.length > 0) go(matches[0].path);
+            }}
+            placeholder="Jump to a page…"
+            aria-label="Search commands"
+            className="h-11 border-0 bg-transparent px-0 text-[14px] shadow-none focus-visible:ring-0"
+          />
+        </div>
+
+        <div className="p-2">
+          {matches.length === 0 ? (
+            <p className="px-3 py-6 text-center text-[13px] text-ink-muted">
+              No command matches “{query}”.
+            </p>
+          ) : (
+            matches.map((command) => (
+              <button
+                key={command.path}
+                type="button"
+                onClick={() => go(command.path)}
+                className="flex w-full items-center gap-2.5 rounded-md px-3 py-2.5 text-left transition-colors hover:bg-sunken"
+              >
+                <command.icon size={15} className="text-ink-subtle" aria-hidden="true" />
+                <span className="text-[13.5px] font-medium text-ink">{command.label}</span>
+                <span className="ml-auto font-mono text-[12px] text-ink-subtle">{command.path}</span>
+              </button>
+            ))
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function Header({ isDark, onToggleTheme }: { isDark: boolean; onToggleTheme: () => void }) {
+  const { status, isMonitoring, unreadNotificationCount, notifications, markNotificationsRead } =
+    useColdChain();
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [commandOpen, setCommandOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+
+  // A single owner for ⌘K, so it can never stack a second dialog on top of an
+  // open one. `event.key` is optional on some IME/Android events — guard it.
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (typeof event.key !== "string") return;
+      if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== "k") return;
+      event.preventDefault();
+      setHelpOpen(false);
+      setNotificationsOpen(false);
+      setCommandOpen((previous) => !previous);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
+  const openNotifications = useCallback(() => {
+    setNotificationsOpen(true);
+    markNotificationsRead();
+  }, [markNotificationsRead]);
+
+  const liveState = !isMonitoring ? "paused" : status === "EXCURSION" ? "excursion" : "live";
+  const liveLabel = liveState === "paused" ? "PAUSED" : liveState === "excursion" ? "EXCURSION" : "LIVE";
+
+  return (
+    <header className="sticky top-0 z-40 border-b border-line bg-surface/85 backdrop-blur-md">
+      <div className={PAGE_CONTAINER}>
+        <div className="grid h-16 grid-cols-[1fr_auto] items-center gap-4 md:grid-cols-[1fr_auto_1fr]">
           {/* Brand */}
-          <Link className="brand flex items-center gap-2.5 shrink-0" to="/" aria-label="Vault home">
-            <span className="brand-mark h-8 w-8 rounded-[9px] bg-[#0e4a47] dark:bg-[#143d3b] text-white grid place-items-center border border-[#0e4a47] dark:border-[#1e4a47] shadow-sm">
-              <Package size={16} strokeWidth={2} aria-hidden="true" />
+          <Link to="/" className="flex min-w-0 items-center gap-2.5 justify-self-start" aria-label="Vault home">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-brand text-primary-foreground">
+              <Package size={17} strokeWidth={2} aria-hidden="true" />
             </span>
-            <span className="leading-none">
-              <strong className="block text-[15px] font-bold tracking-[0.14em] text-[#0e1816] dark:text-[#e8e9e3] leading-none">VAULT</strong>
-              <small className="block font-mono text-[10px] tracking-[0.12em] text-[#5a6a62] dark:text-[#7a8a84] -mt-[1px]">COLD-CHAIN • 01</small>
+            <span className="min-w-0 leading-none">
+              <span className="flex items-center gap-2">
+                <span className="text-[15px] font-semibold tracking-[-0.01em] text-ink">Vault</span>
+                <span className="hidden rounded border border-line px-1.5 py-px text-[10px] font-semibold uppercase tracking-[0.06em] text-ink-subtle xl:inline">
+                  Prototype
+                </span>
+              </span>
+              <span className="mt-1 block truncate font-mono text-[11px] text-ink-subtle">
+                Cold-chain 01
+              </span>
             </span>
-            <span className="hidden lg:inline-flex ml-1 rounded-full border border-[#cbd2c6] dark:border-[#2a352f] bg-[#f7f8f4] dark:bg-[#1c2220] px-1.5 py-0.5 font-mono text-[10px] font-bold tracking-[0.08em] text-[#1d5d59] dark:text-[#7ec8c1]">PROTOTYPE</span>
           </Link>
 
-          {/* Center: segmented nav + command */}
-          <div className="flex-1 flex items-center justify-center gap-3 min-w-0">
-            <nav className="topnav hidden md:flex items-center p-1 rounded-full bg-[#f3f4ed] dark:bg-[#171c19] border border-[#e6ebe4] dark:border-[#2a352f] gap-1" aria-label="Primary navigation">
-              <NavLink
-                to="/monitor"
-                className={({ isActive }) =>
-                  `inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 font-sans text-[13px] font-medium tracking-[-0.01em] transition-all ${isActive ? "bg-white dark:bg-[#0e1210] text-[#0e4a47] dark:text-[#7ec8c1] shadow-sm border border-[#cbd2c6] dark:border-[#2a352f]" : "text-[#5a6a62] dark:text-[#9aa6a1] hover:text-[#0e1816] dark:hover:text-[#e8e9e3]"}`
-                }
-              >
-                <Activity size={16} /> Monitor
+          {/* Primary nav */}
+          <nav
+            className="hidden h-9 items-center gap-0.5 justify-self-center rounded-lg border border-line bg-sunken p-0.5 md:flex"
+            aria-label="Primary"
+          >
+            {NAV_ITEMS.map((item) => (
+              <NavLink key={item.to} to={item.to} className={navLinkClass}>
+                <item.icon size={15} aria-hidden="true" />
+                {item.label}
               </NavLink>
-              <NavLink
-                to="/ledger"
-                className={({ isActive }) =>
-                  `inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 font-sans text-[13px] font-medium tracking-[-0.01em] transition-all ${isActive ? "bg-white dark:bg-[#0e1210] text-[#0e4a47] dark:text-[#7ec8c1] shadow-sm border border-[#cbd2c6] dark:border-[#2a352f]" : "text-[#5a6a62] dark:text-[#9aa6a1] hover:text-[#0e1816] dark:hover:text-[#e8e9e3]"}`
-                }
-              >
-                <Database size={16} /> Ledger
-              </NavLink>
-              <NavLink
-                to="/shipment"
-                className={({ isActive }) =>
-                  `inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 font-sans text-[13px] font-medium tracking-[-0.01em] transition-all ${isActive ? "bg-white dark:bg-[#0e1210] text-[#0e4a47] dark:text-[#7ec8c1] shadow-sm border border-[#cbd2c6] dark:border-[#2a352f]" : "text-[#5a6a62] dark:text-[#9aa6a1] hover:text-[#0e1816] dark:hover:text-[#e8e9e3]"}`
-                }
-              >
-                <Package size={16} /> Shipment
-              </NavLink>
-            </nav>
+            ))}
+          </nav>
 
+          {/* Actions */}
+          <div className="flex items-center gap-2 justify-self-end">
             <button
-              onClick={() => setCmdOpen(true)}
-              className="hidden lg:inline-flex items-center gap-2 rounded-full border border-[#e6ebe4] dark:border-[#2a352f] bg-white dark:bg-[#1c2220] pl-3 pr-2 py-1.5 text-[14px] text-[#7a8a84] hover:border-[#cbd2c6] dark:hover:border-[#3a4a43] hover:bg-[#f7f8f4] dark:hover:bg-[#1e2623] transition-colors shadow-sm"
-              aria-label="Search"
+              type="button"
+              onClick={() => setCommandOpen(true)}
+              className="hidden h-9 w-[190px] items-center gap-2 rounded-lg border border-line bg-raised px-2.5 text-left transition-colors hover:border-line-strong lg:flex"
             >
-              <Search size={16} className="text-[#9aa6a1]" />
-              <span className="font-sans text-[14px]">Search ledger…</span>
-              <span className="ml-2 hidden xl:inline-flex items-center gap-1 rounded-full bg-[#f3f4ed] dark:bg-[#0e1210] border border-[#e6ebe4] dark:border-[#2a352f] px-1.5 py-0.5 font-mono text-[13px] leading-none">
-                <Command size={13} /> K
+              <Search size={15} className="shrink-0 text-ink-subtle" aria-hidden="true" />
+              <span className="truncate whitespace-nowrap text-[13px] text-ink-subtle">Search</span>
+              <span className="ml-auto shrink-0 whitespace-nowrap rounded border border-line px-1.5 font-mono text-[11px] leading-[18px] text-ink-subtle">
+                ⌘K
               </span>
             </button>
-          </div>
 
-          {/* Right: status + actions */}
-          <div className="topbar-actions flex items-center gap-2 shrink-0">
-            <span className="meta-pill hidden sm:inline-flex items-center gap-2 rounded-full border border-[#cbd2c6] dark:border-[#2a352f] bg-[#f7f8f4] dark:bg-[#1e2623] pl-2 pr-3 py-1 shadow-sm" title="Local simulation — live data generated every 2s">
-              <span className="live-dot h-2 w-2 rounded-full bg-[#1e9e75] dark:bg-[#5ac18a] shadow-[0_0_0_4px_rgba(30,158,117,0.14)] animate-pulse" />
-              <span className="font-mono text-[12px] font-bold tracking-[0.08em] text-[#0e4a47] dark:text-[#c8d5d0]">LIVE</span>
-              <span className="hidden lg:inline font-mono text-[12px] tracking-[0.06em] text-[#5a6a62] dark:text-[#9aa6a1]">• LOCAL SIM</span>
+            <span
+              className="hidden h-9 items-center gap-2 whitespace-nowrap rounded-lg border border-line bg-raised px-3 sm:inline-flex"
+              title="Local simulation — a reading every 2 seconds"
+            >
+              <span className="live-dot" data-state={liveState} />
+              <span className="text-[12px] font-semibold tracking-[0.04em] text-ink">{liveLabel}</span>
+              <span className="hidden font-mono text-[11.5px] text-ink-subtle 2xl:inline">
+                local sim
+              </span>
             </span>
 
-            <div className="hidden sm:flex items-center gap-1.5 rounded-full border border-[#e6ebe4] dark:border-[#2a352f] bg-white dark:bg-[#1c2220] p-1 shadow-sm">
-              <button className="icon-button !m-0 !h-7 !w-7 !bg-transparent !border-0 !shadow-none" aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"} onClick={toggleDark} title={isDark ? "Light mode" : "Dark mode"}>
-                {isDark ? <Sun size={16} strokeWidth={2} /> : <Moon size={16} strokeWidth={2} />}
+            <div className="flex h-9 items-center rounded-lg border border-line bg-raised px-0.5">
+              <button
+                type="button"
+                onClick={onToggleTheme}
+                className="grid h-8 w-8 place-items-center rounded-md text-ink-muted transition-colors hover:bg-sunken hover:text-ink"
+                aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+              >
+                {isDark ? <Sun size={16} aria-hidden="true" /> : <Moon size={16} aria-hidden="true" />}
               </button>
-              <div className="h-4 w-px bg-[#e6ebe4] dark:bg-[#2a352f]" />
-              <button className="icon-button !m-0 !h-7 !w-7 !bg-transparent !border-0 !shadow-none" aria-label="Notifications">
-                <Bell size={16} strokeWidth={2} />
+              <span className="h-4 w-px bg-line" aria-hidden="true" />
+              <button
+                type="button"
+                onClick={openNotifications}
+                className="relative grid h-8 w-8 place-items-center rounded-md text-ink-muted transition-colors hover:bg-sunken hover:text-ink"
+                aria-label={
+                  unreadNotificationCount > 0
+                    ? `Notifications, ${unreadNotificationCount} unread`
+                    : "Notifications"
+                }
+              >
+                <Bell size={16} aria-hidden="true" />
+                {unreadNotificationCount > 0 && (
+                  <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-warning ring-2 ring-raised" />
+                )}
               </button>
-              <button className="icon-button !m-0 !h-7 !w-7 !bg-transparent !border-0 !shadow-none" aria-label="Open help" onClick={() => setHelpOpen(true)}>
-                <HelpCircle size={16} strokeWidth={2} />
+              <span className="h-4 w-px bg-line" aria-hidden="true" />
+              <button
+                type="button"
+                onClick={() => setHelpOpen(true)}
+                className="grid h-8 w-8 place-items-center rounded-md text-ink-muted transition-colors hover:bg-sunken hover:text-ink"
+                aria-label="How Vault works"
+              >
+                <CircleHelp size={16} aria-hidden="true" />
               </button>
             </div>
 
-            {/* Mobile dark/help kept as before but grouped */}
-            <div className="flex sm:hidden items-center gap-1">
-              <button className="icon-button" aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"} onClick={toggleDark}>
-                {isDark ? <Sun size={16} /> : <Moon size={16} />}
-              </button>
-              <button className="icon-button" aria-label="Open help" onClick={() => setHelpOpen(true)}>
-                <HelpCircle size={16} />
-              </button>
-            </div>
-
-            <div className="hidden lg:flex items-center gap-2 pl-2 ml-1 border-l border-[#e6ebe4] dark:border-[#2a352f]">
-              <div className="h-8 w-8 rounded-full bg-[#0e4a47] dark:bg-[#143d3b] grid place-items-center text-white font-mono text-[13px] font-bold border border-[#0e4a47] dark:border-[#1e4a47]">RK</div>
-              <div className="hidden xl:block leading-none">
-                <div className="font-sans text-[13px] font-semibold tracking-[-0.01em] text-[#0e1816] dark:text-[#e8e9e3]">Raghav K.</div>
-                <div className="font-mono text-[12px] text-[#7a8a84]">Admin • Vault 01</div>
-              </div>
-              <ChevronDown size={15} className="text-[#9aa6a1] hidden xl:block" />
+            <div
+              className="hidden items-center gap-2 border-l border-line pl-2 xl:flex"
+              title="Demo account — this prototype has no authentication"
+            >
+              <span className="grid h-8 w-8 place-items-center rounded-full bg-sunken font-mono text-[12px] font-semibold text-ink-muted">
+                {DEMO_OPERATOR.initials}
+              </span>
+              <span className="leading-none">
+                <span className="block whitespace-nowrap text-[13px] font-medium text-ink">
+                  {DEMO_OPERATOR.name}
+                </span>
+                <span className="mt-1 block whitespace-nowrap text-[11.5px] text-ink-subtle">
+                  {DEMO_OPERATOR.role}
+                </span>
+              </span>
+              <ChevronDown size={14} className="text-ink-subtle" aria-hidden="true" />
             </div>
           </div>
         </div>
+      </div>
 
-        {/* Mobile nav */}
-        <div className="md:hidden border-t border-[#e6ebe4] dark:border-[#1e2623] bg-[#fcfdfb] dark:bg-[#0f1412]">
-          <nav className="mx-auto max-w-[1420px] px-4 flex gap-1 py-2" aria-label="Mobile navigation">
-            <NavLink to="/monitor" className={({ isActive }) => `flex-1 inline-flex justify-center items-center gap-1.5 rounded-full py-1.5 text-[13px] font-medium ${isActive ? "bg-white dark:bg-[#1c2220] border border-[#cbd2c6] dark:border-[#2a352f] shadow-sm" : "text-[#5a6a62] dark:text-[#9aa6a1]"}`}>
-              <Activity size={16} /> Monitor
+      {/* Mobile nav */}
+      <div className="border-t border-line bg-surface md:hidden">
+        <nav className={`${PAGE_CONTAINER} flex gap-1 py-2`} aria-label="Primary, mobile">
+          {NAV_ITEMS.map((item) => (
+            <NavLink key={item.to} to={item.to} className={mobileNavLinkClass}>
+              <item.icon size={15} aria-hidden="true" />
+              {item.label}
             </NavLink>
-            <NavLink to="/ledger" className={({ isActive }) => `flex-1 inline-flex justify-center items-center gap-1.5 rounded-full py-1.5 text-[13px] font-medium ${isActive ? "bg-white dark:bg-[#1c2220] border border-[#cbd2c6] dark:border-[#2a352f] shadow-sm" : "text-[#5a6a62] dark:text-[#9aa6a1]"}`}>
-              <Database size={16} /> Ledger
-            </NavLink>
-            <NavLink to="/shipment" className={({ isActive }) => `flex-1 inline-flex justify-center items-center gap-1.5 rounded-full py-1.5 text-[13px] font-medium ${isActive ? "bg-white dark:bg-[#1c2220] border border-[#cbd2c6] dark:border-[#2a352f] shadow-sm" : "text-[#5a6a62] dark:text-[#9aa6a1]"}`}>
-              <Package size={16} /> Shipment
-            </NavLink>
-          </nav>
-        </div>
-      </header>
+          ))}
+        </nav>
+      </div>
 
-      <Dialog open={cmdOpen} onOpenChange={setCmdOpen}>
-        <DialogContent className="max-w-[520px] bg-white dark:bg-[#171c19] p-0 overflow-hidden gap-0">
-          <div className="flex items-center gap-2 border-b border-[#e6ebe4] dark:border-[#2a352f] p-3">
-            <Search size={16} className="text-[#9aa6a1] ml-1" />
-            <Input autoFocus placeholder="Search ledger, shipment, or jump to monitor…" className="h-8 border-0 shadow-none focus-visible:ring-0 font-sans text-[15px]" onKeyDown={(e) => { if (e.key === "Enter") { const v = (e.target as HTMLInputElement).value.toLowerCase(); if (v.includes("led")) navigate("/ledger"); else if (v.includes("mon")) navigate("/monitor"); else if (v.includes("ship")) navigate("/shipment"); else if (v.includes("land")) navigate("/"); setCmdOpen(false); } }} />
-            <span className="hidden sm:inline-flex rounded-full bg-[#f3f4ed] dark:bg-[#1c2220] border px-1.5 py-0.5 font-mono text-[13px]">ESC</span>
-          </div>
-          <div className="p-2 grid gap-1">
-            <button onClick={() => { navigate("/monitor"); setCmdOpen(false); }} className="flex items-center gap-2 rounded-lg px-3 py-2 hover:bg-[#f7f8f4] dark:hover:bg-[#1c2220] text-left">
-              <Activity size={16} className="text-[#267e79]" /> <span className="font-sans text-[15px] font-medium">Go to Monitor</span> <span className="ml-auto font-mono text-[13px] text-[#9aa6a1]">/monitor</span>
-            </button>
-            <button onClick={() => { navigate("/ledger"); setCmdOpen(false); }} className="flex items-center gap-2 rounded-lg px-3 py-2 hover:bg-[#f7f8f4] dark:hover:bg-[#1c2220] text-left">
-              <Database size={16} className="text-[#267e79]" /> <span className="font-sans text-[15px] font-medium">Open Ledger</span> <span className="ml-auto font-mono text-[13px] text-[#9aa6a1]">/ledger</span>
-            </button>
-            <button onClick={() => { navigate("/shipment/manage"); setCmdOpen(false); }} className="flex items-center gap-2 rounded-lg px-3 py-2 hover:bg-[#f7f8f4] dark:hover:bg-[#1c2220] text-left">
-              <Package size={16} className="text-[#267e79]" /> <span className="font-sans text-[15px] font-medium">Manage Shipment</span> <span className="ml-auto font-mono text-[13px] text-[#9aa6a1]">/shipment/manage</span>
-            </button>
-          </div>
-        </DialogContent>
-      </Dialog>
+      <CommandPalette open={commandOpen} onOpenChange={setCommandOpen} />
+      <HelpDialog open={helpOpen} onOpenChange={setHelpOpen} />
+      <NotificationsDialog
+        open={notificationsOpen}
+        onOpenChange={setNotificationsOpen}
+        entries={notifications}
+      />
+    </header>
+  );
+}
 
-      <Dialog open={helpOpen} onOpenChange={setHelpOpen}>
-        <DialogContent className="max-w-[560px] max-h-[86vh] overflow-hidden bg-white dark:bg-[#171c19] p-0 gap-0 border dark:border-[#2a352f]">
-          <DialogHeader className="p-6 pb-4 border-b border-[#e6ebe4] dark:border-[#2a352f] bg-[#f7f8f4] dark:bg-[#1c2220]">
-            <DialogTitle className="flex items-center gap-2.5 font-sans text-[15px] font-semibold tracking-[-0.01em] dark:text-[#e8e9e3]">
-              <span className="h-8 w-8 rounded-lg bg-[#0e4a47] dark:bg-[#143d3b] grid place-items-center text-white border border-[#0e4a47] dark:border-[#1e4a47]"><Shield size={16} strokeWidth={2.5} /></span>
-              Vault Help Center
-            </DialogTitle>
-            <DialogDescription className="font-sans text-[15px] leading-[1.5] text-[#5a6a62] dark:text-[#9aa6a1]">Cold-chain integrity console — local simulation, no hardware needed. Here’s how to use it in 60 seconds.</DialogDescription>
-          </DialogHeader>
-          <div className="overflow-auto max-h-[60vh] p-6 space-y-5">
-            <div className="flex gap-3 items-start rounded-lg border border-[#e6ebe4] dark:border-[#2a352f] bg-[#f7f8f4] dark:bg-[#1c2220] p-3.5">
-              <Activity size={18} className="text-[#0e4a47] dark:text-[#7ec8c1] mt-0.5 shrink-0" />
-              <div>
-                <div className="font-sans text-[15px] font-semibold tracking-[-0.01em] dark:text-[#e8e9e3]">Live simulation — what you’re seeing</div>
-                <p className="font-sans text-[15px] leading-[1.6] text-[#33413d] dark:text-[#c8d5d0] mt-1">Temperature is generated every 2 seconds within the 2–8°C corridor (clamped 1.5–8.5 for excursion testing). No DHT22 sensor is attached. Readings live in React state and the shipment log persists to <span className="font-mono text-[13px] bg-white dark:bg-[#0e1210] border dark:border-[#2a352f] px-1.5 py-0.5 rounded">localStorage vault:fieldLog</span>.</p>
-              </div>
-            </div>
-            <div>
-              <div className="font-sans text-[13px] font-bold tracking-[0.08em] text-[#0e4a47] dark:text-[#7ec8c1]">QUICK START — 3 STEPS</div>
-              <div className="mt-3 grid gap-3 sm:grid-cols-3">
-                <div className="rounded-xl border border-[#cbd2c6] dark:border-[#2a352f] bg-white dark:bg-[#1c2220] p-4 shadow-sm">
-                  <div className="h-7 w-7 rounded-full bg-[#e6f0e9] dark:bg-[#1e2623] grid place-items-center text-[#0e4a47] dark:text-[#7ec8c1] font-mono text-[13px] font-bold">1</div>
-                  <div className="mt-2.5 flex items-center gap-1.5 font-sans text-[15px] font-semibold dark:text-[#e8e9e3]"><Package size={16} className="text-[#0e4a47] dark:text-[#7ec8c1]" /> Shipment</div>
-                  <p className="font-sans text-[14px] leading-[1.55] text-[#5a6a62] dark:text-[#9aa6a1] mt-1.5">Open <span className="font-medium text-[#0e4a47] dark:text-[#7ec8c1]">Shipment → Manage</span> to edit box, batch, doses or route. Use Copy, Handoff, or New Shipment — changes reflect instantly.</p>
-                </div>
-                <div className="rounded-xl border border-[#cbd2c6] dark:border-[#2a352f] bg-white dark:bg-[#1c2220] p-4 shadow-sm">
-                  <div className="h-7 w-7 rounded-full bg-[#e6f0e9] dark:bg-[#1e2623] grid place-items-center text-[#0e4a47] dark:text-[#7ec8c1] font-mono text-[13px] font-bold">2</div>
-                  <div className="mt-2.5 flex items-center gap-1.5 font-sans text-[15px] font-semibold dark:text-[#e8e9e3]"><Activity size={16} className="text-[#0e4a47] dark:text-[#7ec8c1]" /> Monitor</div>
-                  <p className="font-sans text-[14px] leading-[1.55] text-[#5a6a62] dark:text-[#9aa6a1] mt-1.5">Watch the live gauge and hover the chart for precise °C. Status turns <span className="font-medium">EXCURSION</span> outside 2–8°C.</p>
-                </div>
-                <div className="rounded-xl border border-[#cbd2c6] dark:border-[#2a352f] bg-white dark:bg-[#1c2220] p-4 shadow-sm">
-                  <div className="h-7 w-7 rounded-full bg-[#e6f0e9] dark:bg-[#1e2623] grid place-items-center text-[#0e4a47] dark:text-[#7ec8c1] font-mono text-[13px] font-bold">3</div>
-                  <div className="mt-2.5 flex items-center gap-1.5 font-sans text-[15px] font-semibold dark:text-[#e8e9e3]"><Database size={16} className="text-[#0e4a47] dark:text-[#7ec8c1]" /> Ledger</div>
-                  <p className="font-sans text-[14px] leading-[1.55] text-[#5a6a62] dark:text-[#9aa6a1] mt-1.5">Every reading is hashed. Use search, copy the full hash, or export CSV for audit.</p>
-                </div>
-              </div>
-            </div>
-            <div className="rounded-lg bg-[#f7f8f4] dark:bg-[#1c2220] border border-[#e6ebe4] dark:border-[#2a352f] p-3.5">
-              <div className="font-sans text-[14px] font-semibold dark:text-[#e8e9e3]">Tips that actually help</div>
-              <ul className="mt-2 space-y-1.5 font-sans text-[14px] leading-[1.55] text-[#33413d] dark:text-[#c8d5d0] list-disc pl-4">
-                <li><span className="font-medium">Green dot</span> = simulation active. Pause from Monitor → <span className="font-mono text-[13px] bg-white dark:bg-[#0e1210] border dark:border-[#2a352f] px-1 rounded">PAUSE SIMULATION</span>.</li>
-                <li>New Shipment resets the log, batch and the chart — great for demos.</li>
-                <li>Toggle dark/light with the sun/moon. Preference is saved.</li>
-                <li>Press <span className="font-mono text-[13px] bg-white dark:bg-[#0e1210] border dark:border-[#2a352f] px-1 rounded">⌘K</span> for command palette.</li>
-              </ul>
-            </div>
-          </div>
-          <div className="p-4 border-t border-[#e6ebe4] dark:border-[#2a352f] bg-[#fcfdfb] dark:bg-[#0e1210] flex items-center justify-between gap-3">
-            <div className="font-mono text-[11px] text-[#667068] dark:text-[#7a8a84]">VAULT 01 • local simulation • v0.1.0</div>
-            <Button onClick={() => setHelpOpen(false)} className="bg-[#0e4a47] hover:bg-[#143d3b] text-white font-sans text-[15px] font-medium rounded-full px-6 h-9 shadow-sm">Got it</Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+function Layout({ isDark, onToggleTheme }: { isDark: boolean; onToggleTheme: () => void }) {
+  const location = useLocation();
 
-      <main id="top" className="page-wrap">
+  // One restrained fade per route change. Header chrome is deliberately not
+  // animated — it persists, so animating it on every mount reads as noise.
+  useEffect(() => {
+    if (prefersReducedMotion()) return undefined;
+    const target = ".page-content";
+    anime({ targets: target, translateY: [6, 0], opacity: [0, 1], duration: 320, easing: "easeOutQuad" });
+    return () => anime.remove(target);
+  }, [location.pathname]);
+
+  return (
+    <div className="flex min-h-screen flex-col bg-surface">
+      <Header isDark={isDark} onToggleTheme={onToggleTheme} />
+
+      <main className={`${PAGE_CONTAINER} page-content flex-1 py-8`}>
         <Outlet />
-        <footer className="footer">
-          <span className="mono">VAULT / FRONTEND PROTOTYPE</span>
-          <span>Designed for a future sensor, ready for today&apos;s handoff.</span>
-          <span className="mono">BUILD 0.1.0 <span className="footer-square" /></span>
-        </footer>
       </main>
+
+      <footer className="border-t border-line">
+        <div
+          className={`${PAGE_CONTAINER} flex flex-col gap-1 py-5 text-[12.5px] text-ink-subtle sm:flex-row sm:items-center sm:justify-between`}
+        >
+          <span>Vault — frontend prototype, local simulation.</span>
+          <span className="font-mono">Build 0.1.0</span>
+        </div>
+      </footer>
     </div>
   );
 }
 
 export default function App() {
   const [isDark, setIsDark] = useState<boolean>(() => {
-    try {
-      const saved = window.localStorage.getItem("vault:theme");
-      if (saved) return saved === "dark";
-      return window.matchMedia("(prefers-color-scheme: dark)").matches;
-    } catch {
-      return false;
+    // index.html has already applied the class before first paint; read it back
+    // so React starts in agreement with the DOM.
+    if (typeof document !== "undefined") {
+      return document.documentElement.classList.contains("dark");
     }
+    return false;
   });
-  const [loading, setLoading] = useState(true);
-  const [showLoader, setShowLoader] = useState(true);
+
+  // One piece of state, three stages. Two booleans that had to agree meant a
+  // synchronous setState inside an effect to keep them in sync.
+  const [loader, setLoader] = useState<"visible" | "fading" | "gone">("visible");
 
   useEffect(() => {
-    const root = window.document.documentElement;
-    if (isDark) root.classList.add("dark");
-    else root.classList.remove("dark");
+    const root = document.documentElement;
+    root.classList.toggle("dark", isDark);
+    root.style.colorScheme = isDark ? "dark" : "light";
     try {
       window.localStorage.setItem("vault:theme", isDark ? "dark" : "light");
     } catch {
-      // localStorage unavailable (e.g. private mode) — theme still applies in-session
+      // Storage unavailable — the theme still applies for this session.
     }
   }, [isDark]);
 
-  useEffect(() => {
-    if (!loading) {
-      anime({ targets: ".loading-screen", opacity: [1, 0], duration: 420, easing: "easeInOutQuad", complete: () => setShowLoader(false) });
-    }
-  }, [loading]);
+  const finishLoading = useCallback(() => {
+    setLoader(prefersReducedMotion() ? "gone" : "fading");
+  }, []);
 
-  const toggleDark = () => setIsDark((v) => !v);
+  useEffect(() => {
+    if (loader !== "fading") return undefined;
+    const target = ".loading-screen";
+    anime({
+      targets: target,
+      opacity: [1, 0],
+      duration: 320,
+      easing: "easeInOutQuad",
+      complete: () => setLoader("gone"),
+    });
+    return () => anime.remove(target);
+  }, [loader]);
+
+  const toggleTheme = useCallback(() => setIsDark((previous) => !previous), []);
 
   return (
     <>
-      {showLoader && <LoadingScreen onFinished={() => setLoading(false)} />}
+      {loader !== "gone" && <LoadingScreen onFinished={finishLoading} />}
       <ColdChainProvider>
-        <Layout isDark={isDark} toggleDark={toggleDark} />
+        <Layout isDark={isDark} onToggleTheme={toggleTheme} />
       </ColdChainProvider>
     </>
   );
