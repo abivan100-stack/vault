@@ -4,7 +4,12 @@ import reactHooks from "eslint-plugin-react-hooks";
 import reactRefresh from "eslint-plugin-react-refresh";
 
 export default tseslint.config(
-  { ignores: ["dist", "node_modules", "coverage"] },
+  {
+    // Flat-config ignore patterns are path globs: a bare "dist" matches only the
+    // root one, so a nested build output (a git worktree under .claude, a
+    // vendored package) would get linted as source.
+    ignores: ["**/dist/**", "**/node_modules/**", "**/coverage/**", ".claude/**"],
+  },
   eslint.configs.recommended,
   ...tseslint.configs.recommended,
   {
