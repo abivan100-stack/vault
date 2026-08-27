@@ -13,7 +13,10 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import ConfirmDialog from "@/components/ConfirmDialog";
+import Stat from "@/components/Stat";
+import StatusPill from "@/components/StatusPill";
 import { useToast } from "@/hooks/useToast";
 import { validateFieldLog, type FieldLogMeta } from "@/lib/shipment";
 import { formatClock, formatIsoDate } from "@/lib/simulation";
@@ -92,8 +95,8 @@ export default function ShipmentManagePage() {
         </p>
       </header>
 
-      <section className="rounded-xl border border-line bg-raised">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-line p-5">
+      <Card render={<section />}>
+        <CardHeader className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
             <p className="tabular truncate font-mono text-[13px] font-medium text-ink">
               {fieldLogMeta.box} · {fieldLogMeta.batch}
@@ -102,16 +105,12 @@ export default function ShipmentManagePage() {
               {fieldLogMeta.product} · {fieldLogMeta.doses} · {fieldLogMeta.route}
             </p>
           </div>
-          <span
-            className={`inline-flex h-7 shrink-0 items-center rounded-md px-2.5 text-[12px] font-medium ${
-              isHandedOff ? "bg-success-soft text-success" : "bg-sunken text-ink-muted"
-            }`}
-          >
+          <StatusPill size="lg" tone={isHandedOff ? "success" : "neutral"}>
             {isHandedOff ? "Handed off" : "In transit"}
-          </span>
-        </div>
+          </StatusPill>
+        </CardHeader>
 
-        <div className="grid gap-2.5 p-5 sm:grid-cols-2 lg:grid-cols-4">
+        <CardContent className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
           <Button onClick={openEditor} className="h-9 gap-2 text-sm">
             <Pencil size={15} aria-hidden="true" />
             Edit details
@@ -133,9 +132,9 @@ export default function ShipmentManagePage() {
             <RotateCcw size={15} aria-hidden="true" />
             Reset fields
           </Button>
-        </div>
+        </CardContent>
 
-        <div className="border-t border-line p-5">
+        <CardFooter>
           <Button
             variant="secondary"
             onClick={() => setConfirm("new")}
@@ -148,10 +147,10 @@ export default function ShipmentManagePage() {
             A new shipment issues a fresh box and batch and restarts the chart. The ledger is
             append-only — it carries on, with the new shipment recorded as an entry.
           </p>
-        </div>
+        </CardFooter>
 
         {toast && (
-          <div className="border-t border-line px-5 py-3">
+          <CardFooter className="px-5 py-3">
             <p
               className={`flex items-center gap-2 text-[13px] ${
                 toast.tone === "error" ? "text-warning" : "text-ink-muted"
@@ -160,35 +159,39 @@ export default function ShipmentManagePage() {
               <Check size={14} aria-hidden="true" />
               {toast.message}
             </p>
-          </div>
+          </CardFooter>
         )}
-      </section>
+      </Card>
 
-      <section className="rounded-xl border border-line bg-sunken p-5">
-        <h2 className="eyebrow">Record</h2>
+      <Card render={<section />} surface="sunken" className="p-5">
+        <CardTitle>Record</CardTitle>
         <dl className="mt-3 grid gap-4 sm:grid-cols-3">
-          <div>
-            <dt className="text-[11.5px] text-ink-subtle">Log id</dt>
-            <dd className="tabular mt-1 truncate font-mono text-[13px] text-ink" title={fieldLogMeta.logId}>
-              {fieldLogMeta.logId}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-[11.5px] text-ink-subtle">Started</dt>
-            <dd className="tabular mt-1 font-mono text-[13px] text-ink">
-              {formatIsoDate(fieldLogMeta.startedAt)} {formatClock(fieldLogMeta.startedAt)}
-            </dd>
-          </div>
-          <div>
-            <dt className="text-[11.5px] text-ink-subtle">Handoff</dt>
-            <dd className="tabular mt-1 font-mono text-[13px] text-ink">
-              {fieldLogMeta.handedOffAt
+          <Stat
+            label="Log id"
+            value={fieldLogMeta.logId}
+            mono
+            weight="normal"
+            truncate
+            title={fieldLogMeta.logId}
+          />
+          <Stat
+            label="Started"
+            value={`${formatIsoDate(fieldLogMeta.startedAt)} ${formatClock(fieldLogMeta.startedAt)}`}
+            mono
+            weight="normal"
+          />
+          <Stat
+            label="Handoff"
+            value={
+              fieldLogMeta.handedOffAt
                 ? `${formatIsoDate(fieldLogMeta.handedOffAt)} ${formatClock(fieldLogMeta.handedOffAt)}`
-                : "—"}
-            </dd>
-          </div>
+                : "—"
+            }
+            mono
+            weight="normal"
+          />
         </dl>
-      </section>
+      </Card>
 
       <Dialog open={editOpen} onOpenChange={setEditOpen}>
         <DialogContent className="max-w-[460px]">

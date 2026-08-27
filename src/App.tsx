@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import anime from "animejs";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
@@ -18,6 +18,7 @@ import {
 import { ColdChainProvider, useColdChain } from "@/context/ColdChainContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Separator } from "@/components/ui/separator";
 import {
   Dialog,
   DialogContent,
@@ -26,10 +27,11 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import LoadingScreen from "@/components/LoadingScreen";
+import { useAnime } from "@/hooks/useAnime";
 import { formatClock } from "@/lib/simulation";
 import { formatEventLabel, type LedgerEntry } from "@/lib/ledger";
 import { SAFE_MAX_C, SAFE_MIN_C } from "@/lib/chart";
-import { prefersReducedMotion } from "@/lib/motion";
+import { fadeInUp, fadeOut, prefersReducedMotion } from "@/lib/motion";
 
 /**
  * The prototype has no authentication. The operator block is clearly labelled
@@ -172,8 +174,8 @@ function HelpDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open
             <h3 className="text-[13px] font-semibold text-ink">What persists</h3>
             <ul className="mt-1.5 space-y-1.5 text-[13.5px] leading-relaxed text-ink-muted">
               <li>
-                Shipment record and ledger are saved to <code className="font-mono text-[12.5px]">localStorage</code>
-                and survive a reload.
+                Shipment record and ledger are saved to{" "}
+                <code className="font-mono text-[12.5px]">localStorage</code> and survive a reload.
               </li>
               <li>The chart window is live only — it restarts with the session.</li>
               <li>Theme preference is remembered.</li>
@@ -388,19 +390,25 @@ function Header({ isDark, onToggleTheme }: { isDark: boolean; onToggleTheme: () 
             </span>
 
             <div className="flex h-9 items-center rounded-lg border border-line bg-raised px-0.5">
-              <button
-                type="button"
+              <Button
+                variant="ghost"
+                size="icon"
                 onClick={onToggleTheme}
-                className="grid h-8 w-8 place-items-center rounded-md text-ink-muted transition-colors hover:bg-sunken hover:text-ink"
+                className="rounded-md text-ink-muted"
                 aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
               >
                 {isDark ? <Sun size={16} aria-hidden="true" /> : <Moon size={16} aria-hidden="true" />}
-              </button>
-              <span className="h-4 w-px bg-line" aria-hidden="true" />
-              <button
-                type="button"
+              </Button>
+              {/* Purely visual spacing between three already-labelled icon
+                  buttons. Base UI's Separator always sets role="separator" and
+                  has no `decorative` opt-out, so hide it explicitly — otherwise
+                  browse-mode users get two content-free stops. */}
+              <Separator orientation="vertical" className="h-4" aria-hidden="true" />
+              <Button
+                variant="ghost"
+                size="icon"
                 onClick={openNotifications}
-                className="relative grid h-8 w-8 place-items-center rounded-md text-ink-muted transition-colors hover:bg-sunken hover:text-ink"
+                className="relative rounded-md text-ink-muted"
                 aria-label={
                   unreadNotificationCount > 0
                     ? `Notifications, ${unreadNotificationCount} unread`
@@ -411,16 +419,21 @@ function Header({ isDark, onToggleTheme }: { isDark: boolean; onToggleTheme: () 
                 {unreadNotificationCount > 0 && (
                   <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-warning ring-2 ring-raised" />
                 )}
-              </button>
-              <span className="h-4 w-px bg-line" aria-hidden="true" />
-              <button
-                type="button"
+              </Button>
+              {/* Purely visual spacing between three already-labelled icon
+                  buttons. Base UI's Separator always sets role="separator" and
+                  has no `decorative` opt-out, so hide it explicitly — otherwise
+                  browse-mode users get two content-free stops. */}
+              <Separator orientation="vertical" className="h-4" aria-hidden="true" />
+              <Button
+                variant="ghost"
+                size="icon"
                 onClick={() => setHelpOpen(true)}
-                className="grid h-8 w-8 place-items-center rounded-md text-ink-muted transition-colors hover:bg-sunken hover:text-ink"
+                className="rounded-md text-ink-muted"
                 aria-label="How Vault works"
               >
                 <CircleHelp size={16} aria-hidden="true" />
-              </button>
+              </Button>
             </div>
 
             <div
@@ -469,21 +482,18 @@ function Header({ isDark, onToggleTheme }: { isDark: boolean; onToggleTheme: () 
 
 function Layout({ isDark, onToggleTheme }: { isDark: boolean; onToggleTheme: () => void }) {
   const location = useLocation();
+  const mainRef = useRef<HTMLElement>(null);
 
   // One restrained fade per route change. Header chrome is deliberately not
   // animated — it persists, so animating it on every mount reads as noise.
-  useEffect(() => {
-    if (prefersReducedMotion()) return undefined;
-    const target = ".page-content";
-    anime({ targets: target, translateY: [6, 0], opacity: [0, 1], duration: 320, easing: "easeOutQuad" });
-    return () => anime.remove(target);
-  }, [location.pathname]);
+  // Targets the <main> node directly via ref, never a CSS selector.
+  useAnime(mainRef, fadeInUp, [location.pathname]);
 
   return (
     <div className="flex min-h-screen flex-col bg-surface">
       <Header isDark={isDark} onToggleTheme={onToggleTheme} />
 
-      <main className={`${PAGE_CONTAINER} page-content flex-1 py-8`}>
+      <main ref={mainRef} className={`${PAGE_CONTAINER} page-content flex-1 py-8`}>
         <Outlet />
       </main>
 
@@ -525,27 +535,45 @@ export default function App() {
   }, [isDark]);
 
   const finishLoading = useCallback(() => {
+    // This is the ONLY reason a reduced-motion viewer doesn't hang on the
+    // splash screen forever: useAnime never starts the animation below when
+    // reduced motion is on, so its `complete` callback — the other path to
+    // "gone" — never fires. Going straight to "gone" here is not optional.
     setLoader(prefersReducedMotion() ? "gone" : "fading");
   }, []);
 
+  const loadingScreenRef = useRef<HTMLDivElement>(null);
+
+  // Gated on `loader === "fading"`, so this can't be expressed as a plain
+  // `useAnime(ref, params, deps)` call — that hook always animates once its
+  // ref resolves to a node, and the node exists (mounted) well before this
+  // ever needs to fire. Ref-based like useAnime (never a selector), same
+  // remove-before-run/cleanup contract, but with an explicit gate.
   useEffect(() => {
     if (loader !== "fading") return undefined;
-    const target = ".loading-screen";
-    anime({
-      targets: target,
-      opacity: [1, 0],
-      duration: 320,
-      easing: "easeInOutQuad",
-      complete: () => setLoader("gone"),
-    });
-    return () => anime.remove(target);
+    const node = loadingScreenRef.current;
+    if (!node) return undefined;
+
+    anime.remove(node);
+
+    if (prefersReducedMotion()) {
+      // Defensive only: `finishLoading` already routes reduced-motion
+      // straight to "gone" without ever setting "fading", so this branch
+      // should be unreachable. If it ever were reached, the node must not be
+      // left invisible.
+      anime.set(node, { opacity: 1 });
+      return undefined;
+    }
+
+    anime({ ...fadeOut, targets: node, complete: () => setLoader("gone") });
+    return () => anime.remove(node);
   }, [loader]);
 
   const toggleTheme = useCallback(() => setIsDark((previous) => !previous), []);
 
   return (
     <>
-      {loader !== "gone" && <LoadingScreen onFinished={finishLoading} />}
+      {loader !== "gone" && <LoadingScreen ref={loadingScreenRef} onFinished={finishLoading} />}
       <ColdChainProvider>
         <Layout isDark={isDark} onToggleTheme={toggleTheme} />
       </ColdChainProvider>
