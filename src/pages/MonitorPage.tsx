@@ -296,7 +296,7 @@ export default function MonitorPage() {
 
               {hoveredReading && (
                 <div
-                  className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-[calc(100%+10px)] rounded-lg border border-line bg-raised px-2.5 py-2 shadow-sm"
+                  className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-[calc(100%+10px)] rounded-lg border border-line bg-raised px-2.5 py-2 shadow-e3"
                   style={{
                     left: `${toChartX(hoveredIndex, readings.length, 100)}%`,
                     top: `${toChartY(hoveredReading.value, 100)}%`,

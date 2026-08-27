@@ -274,20 +274,36 @@
 }
 
 /* Chart internals — SVG presentation attributes are clearer as CSS. */
+
+/* Light gets its own values so the chart reads clearly against the white
+   card it's drawn on; dark reproduces today's appearance exactly via the
+   overrides at the bottom of this block. */
+:root {
+  /* A 5% brand wash on white plot area is essentially invisible, so light
+     uses the solid --brand-soft tint instead of an opacity trick. */
+  --chart-band-fill: var(--brand-soft);
+  --chart-band-opacity: 1;
+
+  /* Gridlines stay on --line (matches every other hairline in the app);
+     the corridor limits get a distinctly stronger, neutral color so they
+     read as the important lines rather than "a slightly bolder gridline". */
+  --chart-threshold-color: var(--ink-muted);
+}
+
 .chart-gridline {
   stroke: var(--line);
   stroke-width: 1;
 }
 
 .chart-threshold {
-  stroke: var(--line-strong);
+  stroke: var(--chart-threshold-color);
   stroke-width: 1;
   stroke-dasharray: 4 4;
 }
 
 .chart-band {
-  fill: var(--brand);
-  opacity: 0.05;
+  fill: var(--chart-band-fill);
+  opacity: var(--chart-band-opacity);
 }
 
 .chart-path {
@@ -343,4 +359,13 @@
   outline: none;
   stroke: var(--ring);
   stroke-width: 2;
+}
+
+/* Dark mode is deliberately unchanged: reproduce the pre-refresh look
+   (5% brand wash for the band, --line-strong for the threshold lines)
+   via chart-local overrides rather than touching the main .dark block. */
+.dark {
+  --chart-band-fill: var(--brand);
+  --chart-band-opacity: 0.05;
+  --chart-threshold-color: var(--line-strong);
 }
