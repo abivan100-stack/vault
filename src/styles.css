@@ -233,9 +233,13 @@
    site; only things utilities cannot express well live here.
    --------------------------------------------------------------------------- */
 
-/* Section label above a heading — small, uppercase, muted. No "01 /" numbering. */
-.eyebrow {
-  @apply text-[11px] font-semibold uppercase tracking-[0.1em] text-ink-subtle;
+/* Section label above a heading — small, uppercase, muted. No "01 /" numbering.
+   Layered so a call site can override the colour with a utility; unlayered CSS
+   always wins over Tailwind's utilities regardless of source order. */
+@layer components {
+  .eyebrow {
+    @apply text-[11px] font-semibold uppercase tracking-[0.1em] text-ink-subtle;
+  }
 }
 
 .live-dot {

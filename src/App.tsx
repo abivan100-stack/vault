@@ -330,7 +330,7 @@ function Header({ isDark, onToggleTheme }: { isDark: boolean; onToggleTheme: () 
   const liveLabel = liveState === "paused" ? "PAUSED" : liveState === "excursion" ? "EXCURSION" : "LIVE";
 
   return (
-    <header className="sticky top-0 z-40 border-b border-line bg-surface/85 backdrop-blur-md">
+    <header className="sticky top-0 z-40 border-b border-line bg-surface shadow-e1 dark:bg-surface/85 dark:backdrop-blur-md">
       <div className={PAGE_CONTAINER}>
         <div className="grid h-16 grid-cols-[1fr_auto] items-center gap-4 md:grid-cols-[1fr_auto_1fr]">
           {/* Brand */}
@@ -369,7 +369,7 @@ function Header({ isDark, onToggleTheme }: { isDark: boolean; onToggleTheme: () 
             <button
               type="button"
               onClick={() => setCommandOpen(true)}
-              className="hidden h-9 w-[190px] items-center gap-2 rounded-lg border border-line bg-raised px-2.5 text-left transition-colors hover:border-line-strong lg:flex"
+              className="hidden h-9 w-[190px] items-center gap-2 rounded-lg border border-line bg-raised px-2.5 text-left shadow-e1 transition-colors hover:border-line-strong lg:flex"
             >
               <Search size={15} className="shrink-0 text-ink-subtle" aria-hidden="true" />
               <span className="truncate whitespace-nowrap text-[13px] text-ink-subtle">Search</span>
@@ -379,7 +379,7 @@ function Header({ isDark, onToggleTheme }: { isDark: boolean; onToggleTheme: () 
             </button>
 
             <span
-              className="hidden h-9 items-center gap-2 whitespace-nowrap rounded-lg border border-line bg-raised px-3 sm:inline-flex"
+              className="hidden h-9 items-center gap-2 whitespace-nowrap rounded-lg border border-line bg-raised px-3 shadow-e1 sm:inline-flex"
               title="Local simulation — a reading every 2 seconds"
             >
               <span className="live-dot" data-state={liveState} />
@@ -389,7 +389,7 @@ function Header({ isDark, onToggleTheme }: { isDark: boolean; onToggleTheme: () 
               </span>
             </span>
 
-            <div className="flex h-9 items-center rounded-lg border border-line bg-raised px-0.5">
+            <div className="flex h-9 items-center rounded-lg border border-line bg-raised px-0.5 shadow-e1">
               <Button
                 variant="ghost"
                 size="icon"
@@ -437,7 +437,7 @@ function Header({ isDark, onToggleTheme }: { isDark: boolean; onToggleTheme: () 
             </div>
 
             <div
-              className="hidden items-center gap-2 border-l border-line pl-2 xl:flex"
+              className="hidden h-9 items-center gap-2 rounded-lg border border-line bg-raised px-2.5 shadow-e1 xl:flex"
               title="Demo account — this prototype has no authentication"
             >
               <span className="grid h-8 w-8 place-items-center rounded-full bg-sunken font-mono text-[12px] font-semibold text-ink-muted">

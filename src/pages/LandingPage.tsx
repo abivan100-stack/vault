@@ -61,7 +61,7 @@ export default function LandingPage() {
     <div className="space-y-10">
       <section ref={heroRef} className="grid gap-10 pt-4 lg:grid-cols-[1.1fr_0.9fr] lg:items-center">
         <div>
-          <p className="eyebrow">Cold-chain integrity console</p>
+          <p className="eyebrow text-brand-ink">Cold-chain integrity console</p>
           <h1 className="mt-3 max-w-[16ch] text-[34px] font-semibold leading-[1.1] tracking-[-0.03em] text-ink sm:text-[40px]">
             Proof the cold chain held.
           </h1>
@@ -163,7 +163,7 @@ export default function LandingPage() {
         </Card>
       </section>
 
-      <section className="border-t border-line pt-8">
+      <section className="border-t border-brand-line pt-8 dark:border-line">
         <h2 className="eyebrow">What it does</h2>
         <div ref={cardsRowRef} className="mt-4 grid gap-4 md:grid-cols-3">
           {[
@@ -184,7 +184,9 @@ export default function LandingPage() {
             },
           ].map((item) => (
             <Card key={item.title} render={<article />} className="p-5">
-              <item.icon size={16} className="text-ink-subtle" aria-hidden="true" />
+              <span className="grid h-8 w-8 place-items-center rounded-md bg-brand-soft text-brand-ink">
+                <item.icon size={16} aria-hidden="true" />
+              </span>
               <h3 className="mt-3 text-[14px] font-semibold tracking-[-0.01em] text-ink">
                 {item.title}
               </h3>
