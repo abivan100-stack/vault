@@ -1,2 +1,10 @@
 node_modules/
 dist/
+coverage/
+
+# Playwright MCP scratch output
+.playwright-mcp/
+*.local
+
+# Claude Code session worktrees
+.claude/worktrees/

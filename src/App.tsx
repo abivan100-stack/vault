@@ -1,184 +1,554 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import anime from "animejs";
+import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
+import {
+  Activity,
+  Bell,
+  ChevronDown,
+  CircleHelp,
+  Database,
+  Moon,
+  Package,
+  Search,
+  Sun,
+  Truck,
+  TriangleAlert,
+  ShieldCheck,
+} from "lucide-react";
+import { ColdChainProvider, useColdChain } from "@/context/ColdChainContext";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import LoadingScreen from "@/components/LoadingScreen";
+import { formatClock } from "@/lib/simulation";
+import { formatEventLabel, type LedgerEntry } from "@/lib/ledger";
+import { SAFE_MAX_C, SAFE_MIN_C } from "@/lib/chart";
+import { prefersReducedMotion } from "@/lib/motion";
 
-type Status = "SAFE" | "EXCURSION";
+/**
+ * The prototype has no authentication. The operator block is clearly labelled
+ * as demo data so it is never mistaken for a signed-in user.
+ */
+const DEMO_OPERATOR = {
+  initials: "RK",
+  name: "Raghav K.",
+  role: "Demo operator",
+} as const;
 
-type Reading = {
-  time: string;
-  value: number;
-};
+const NAV_ITEMS = [
+  { to: "/monitor", label: "Monitor", icon: Activity },
+  { to: "/ledger", label: "Ledger", icon: Database },
+  { to: "/shipment", label: "Shipment", icon: Package },
+] as const;
 
-const seedReadings: Reading[] = [
-  { time: "14:06", value: 4.6 },
-  { time: "14:08", value: 4.8 },
-  { time: "14:10", value: 4.7 },
-  { time: "14:12", value: 4.9 },
-  { time: "14:14", value: 4.8 },
-  { time: "14:16", value: 4.8 },
-  { time: "14:18", value: 4.7 },
-  { time: "14:20", value: 4.8 },
-];
+const PAGE_CONTAINER = "mx-auto w-full max-w-[1180px] px-5 sm:px-8";
 
-const ledgerRows = [
-  { sequence: "042", event: "TEMPERATURE_READING", time: "14:20:02", status: "VALID" },
-  { sequence: "041", event: "TEMPERATURE_READING", time: "14:10:02", status: "VALID" },
-  { sequence: "040", event: "TEMPERATURE_READING", time: "14:00:02", status: "VALID" },
-];
-
-function formatTime(date: Date): string {
-  return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
+function navLinkClass({ isActive }: { isActive: boolean }): string {
+  const base =
+    "inline-flex h-8 items-center gap-2 rounded-md px-3.5 text-[13.5px] font-medium transition-colors";
+  return isActive
+    ? `${base} bg-raised text-ink ring-1 ring-line`
+    : `${base} text-ink-muted hover:text-ink`;
 }
 
-function App() {
-  const [isMonitoring, setIsMonitoring] = useState(true);
-  const [temperature, setTemperature] = useState(4.8);
-  const [readings, setReadings] = useState(seedReadings);
-  const status: Status = temperature < 2 || temperature > 8 ? "EXCURSION" : "SAFE";
+function mobileNavLinkClass({ isActive }: { isActive: boolean }): string {
+  const base =
+    "inline-flex h-8 flex-1 items-center justify-center gap-2 rounded-md text-[13.5px] font-medium transition-colors";
+  return isActive
+    ? `${base} bg-raised text-ink ring-1 ring-line`
+    : `${base} text-ink-muted hover:text-ink`;
+}
 
-  useEffect(() => {
-    if (!isMonitoring) return undefined;
+function notificationIcon(event: LedgerEntry["event"]) {
+  if (event === "EXCURSION_OPEN") return TriangleAlert;
+  if (event === "HANDOFF_INIT") return Truck;
+  return ShieldCheck;
+}
 
-    const interval = window.setInterval(() => {
-      const next = temperature + (Math.random() - 0.5) * 0.24;
-      const nextTemperature = Math.min(8.5, Math.max(1.5, Number(next.toFixed(1))));
-      setTemperature(nextTemperature);
-      setReadings((current) => [
-        ...current.slice(-7),
-        { time: formatTime(new Date()), value: nextTemperature },
-      ]);
-    }, 2000);
+function NotificationsDialog({
+  open,
+  onOpenChange,
+  entries,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  entries: LedgerEntry[];
+}) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-[460px] gap-0 overflow-hidden p-0">
+        <DialogHeader className="border-b border-line p-5">
+          <DialogTitle className="text-[15px] font-semibold tracking-[-0.01em]">
+            Notifications
+          </DialogTitle>
+          <DialogDescription className="text-[13px] text-ink-muted">
+            Corridor and handoff events, taken straight from the ledger.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="max-h-[52vh] overflow-auto">
+          {entries.length === 0 ? (
+            <p className="p-5 text-[13px] text-ink-muted">
+              Nothing yet. Excursions and handoffs will appear here as they are recorded.
+            </p>
+          ) : (
+            <ul className="divide-y divide-line">
+              {entries.map((entry) => {
+                const Icon = notificationIcon(entry.event);
+                const isAlert = entry.event === "EXCURSION_OPEN";
+                return (
+                  <li key={entry.hash} className="flex items-start gap-3 p-4">
+                    <span
+                      className={`mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-md ${
+                        isAlert ? "bg-warning-soft text-warning" : "bg-success-soft text-success"
+                      }`}
+                    >
+                      <Icon size={15} aria-hidden="true" />
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-[13.5px] font-medium text-ink">
+                        {formatEventLabel(entry.event)}
+                      </p>
+                      <p className="mt-0.5 text-[13px] leading-snug text-ink-muted">
+                        {entry.detail}
+                      </p>
+                      <p className="tabular mt-1 font-mono text-[11.5px] text-ink-subtle">
+                        #{entry.sequence} · {formatClock(entry.at)}
+                      </p>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
-    return () => window.clearInterval(interval);
-  }, [isMonitoring, temperature]);
+function HelpDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[86vh] max-w-[540px] gap-0 overflow-hidden p-0">
+        <DialogHeader className="border-b border-line p-5">
+          <DialogTitle className="text-[15px] font-semibold tracking-[-0.01em]">
+            How Vault works
+          </DialogTitle>
+          <DialogDescription className="text-[13px] text-ink-muted">
+            A local simulation — no sensor is attached and nothing leaves this browser.
+          </DialogDescription>
+        </DialogHeader>
 
-  const chartPath = useMemo(() => {
-    const width = 720;
-    const height = 190;
-    return readings
-      .map((reading, index) => {
-        const x = (index / Math.max(readings.length - 1, 1)) * width;
-        const y = height - ((reading.value - 2) / 6) * height;
-        return `${index === 0 ? "M" : "L"}${x.toFixed(1)} ${y.toFixed(1)}`;
-      })
-      .join(" ");
-  }, [readings]);
+        <div className="max-h-[58vh] space-y-5 overflow-auto p-5">
+          <section>
+            <h3 className="text-[13px] font-semibold text-ink">The simulation</h3>
+            <p className="mt-1.5 text-[13.5px] leading-relaxed text-ink-muted">
+              A temperature is generated every 2 seconds inside the {SAFE_MIN_C}–{SAFE_MAX_C} °C
+              corridor, with 0.5 °C of headroom either side so excursions can be exercised.
+              Status flips to <span className="font-medium text-ink">EXCURSION</span> the moment a
+              reading leaves the corridor.
+            </p>
+          </section>
+
+          <section>
+            <h3 className="text-[13px] font-semibold text-ink">The ledger</h3>
+            <p className="mt-1.5 text-[13.5px] leading-relaxed text-ink-muted">
+              Every 10 seconds the current reading is appended to a hash-chained ledger, as are
+              shipment edits, excursions and handoffs. Each entry commits to its own contents and to
+              the previous entry's digest, so the Ledger page can show whether any retained entry
+              has been edited, removed or reordered. It is tamper evidence, not tamper proofing:
+              the chain lives in this browser's storage with nothing signing it, so anyone able to
+              write that storage could replace it wholesale.
+            </p>
+          </section>
+
+          <section>
+            <h3 className="text-[13px] font-semibold text-ink">What persists</h3>
+            <ul className="mt-1.5 space-y-1.5 text-[13.5px] leading-relaxed text-ink-muted">
+              <li>
+                Shipment record and ledger are saved to <code className="font-mono text-[12.5px]">localStorage</code>
+                and survive a reload.
+              </li>
+              <li>The chart window is live only — it restarts with the session.</li>
+              <li>Theme preference is remembered.</li>
+            </ul>
+          </section>
+
+          <section>
+            <h3 className="text-[13px] font-semibold text-ink">Shortcuts</h3>
+            <p className="mt-1.5 text-[13.5px] leading-relaxed text-ink-muted">
+              <kbd className="rounded border border-line bg-sunken px-1.5 py-0.5 font-mono text-[12px]">
+                ⌘K
+              </kbd>{" "}
+              or{" "}
+              <kbd className="rounded border border-line bg-sunken px-1.5 py-0.5 font-mono text-[12px]">
+                Ctrl K
+              </kbd>{" "}
+              opens the command palette. Shipment edits live under Shipment → Manage.
+            </p>
+          </section>
+        </div>
+
+        <div className="flex justify-end border-t border-line p-4">
+          <Button onClick={() => onOpenChange(false)} className="h-9 px-5 text-sm">
+            Got it
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function CommandPalette({
+  open,
+  onOpenChange,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const navigate = useNavigate();
+  const [query, setQuery] = useState("");
+
+  const commands = useMemo(
+    () => [
+      { label: "Go to Monitor", path: "/monitor", icon: Activity, keywords: "monitor temperature chart live" },
+      { label: "Open Ledger", path: "/ledger", icon: Database, keywords: "ledger hash audit trail export" },
+      { label: "Shipment overview", path: "/shipment", icon: Package, keywords: "shipment box batch route" },
+      { label: "Manage shipment", path: "/shipment/manage", icon: Truck, keywords: "edit handoff new reset manage" },
+    ],
+    [],
+  );
+
+  const matches = useMemo(() => {
+    const term = query.trim().toLowerCase();
+    if (!term) return commands;
+    return commands.filter(
+      (command) =>
+        command.label.toLowerCase().includes(term) || command.keywords.includes(term),
+    );
+  }, [commands, query]);
+
+  const go = useCallback(
+    (path: string) => {
+      navigate(path);
+      onOpenChange(false);
+      setQuery("");
+    },
+    [navigate, onOpenChange],
+  );
 
   return (
-    <div className="vault-app">
-      <header className="topbar">
-        <a className="brand" href="#top" aria-label="Vault home">
-          <span className="brand-mark">V</span>
-          <span>
-            <strong>VAULT</strong>
-            <small>COLD-CHAIN / 01</small>
-          </span>
-        </a>
-        <nav className="topnav" aria-label="Primary navigation">
-          <a className="active" href="#monitor">MONITOR</a>
-          <a href="#ledger">LEDGER</a>
-          <a href="#shipment">SHIPMENT</a>
-        </nav>
-        <div className="topbar-meta">
-          <span className="live-dot" />
-          <span className="mono">SIMULATED / LOCAL</span>
-          <button className="icon-button" aria-label="Open help">?</button>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        onOpenChange(next);
+        if (!next) setQuery("");
+      }}
+    >
+      <DialogContent className="max-w-[520px] gap-0 overflow-hidden p-0">
+        <DialogHeader className="sr-only">
+          <DialogTitle>Command palette</DialogTitle>
+          <DialogDescription>Search and jump to a page.</DialogDescription>
+        </DialogHeader>
+
+        <div className="flex items-center gap-2 border-b border-line px-3">
+          <Search size={16} className="shrink-0 text-ink-subtle" aria-hidden="true" />
+          <Input
+            autoFocus
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && matches.length > 0) go(matches[0].path);
+            }}
+            placeholder="Jump to a page…"
+            aria-label="Search commands"
+            className="h-11 border-0 bg-transparent px-0 text-[14px] shadow-none focus-visible:ring-0"
+          />
         </div>
-      </header>
 
-      <main id="top" className="page-wrap">
-        <section className="intro-grid" id="shipment">
-          <aside className="field-log" aria-label="Shipment log">
-            <div className="eyebrow">FIELD LOG / 2026-00124</div>
-            <div className="log-rule" />
-            <dl>
-              <div><dt>BOX</dt><dd>VCC-BOX-001</dd></div>
-              <div><dt>PRODUCT</dt><dd>Demo Vaccine A</dd></div>
-              <div><dt>BATCH</dt><dd>VAC-B2418</dd></div>
-              <div><dt>DOSES</dt><dd>250 units</dd></div>
-              <div><dt>RANGE</dt><dd>02.0-08.0 deg C</dd></div>
-            </dl>
-            <div className="log-foot mono">STARTED 13:42:17<br />ROUTE / DELHI -&gt; JAIPUR</div>
-          </aside>
-
-          <div className="intro-copy">
-            <div className="eyebrow teal">COLD-CHAIN INTEGRITY / LIVE SPECIMEN</div>
-            <h1>Keep every<br /><span>dose</span> in range.</h1>
-            <p className="intro-lede">A quiet record of temperature, time, and trust. Vault keeps the journey visible from loading bay to last-mile handoff.</p>
-            <div className="intro-note"><span className="note-line" /> <span>One box. One unbroken chain.</span></div>
-          </div>
-
-          <div className="orbit-wrap" aria-label="Live monitoring visual">
-            <div className="orbit-ring ring-one" />
-            <div className="orbit-ring ring-two" />
-            <div className={`orbit-core ${status.toLowerCase()}`}>
-              <span className="shield-glyph" aria-hidden="true">OK</span>
-              <strong>{status}</strong>
-              <span>{status === "SAFE" ? "2-8 deg C corridor" : "outside corridor"}</span>
-            </div>
-            <div className="orbit-label label-top mono">SENSOR / DHT22</div>
-            <div className="orbit-label label-bottom mono">SIGNAL 98%</div>
-          </div>
-        </section>
-
-        <section className="monitor-section" id="monitor">
-          <div className="section-heading">
-            <div>
-              <div className="eyebrow">01 / LIVE MONITOR</div>
-              <h2>Temperature at a glance.</h2>
-            </div>
-            <div className="section-heading-meta mono"><span className="live-dot" /> LAST SYNC 14:20:02 UTC+05:30</div>
-          </div>
-
-          <div className="monitor-grid">
-            <div className="status-panel">
-              <div className="status-panel-head"><span className="eyebrow">CURRENT STATE</span><span className="tiny-icon" aria-hidden="true">o</span></div>
-              <div className={`status-word ${status.toLowerCase()}`}>
-                {status}
-              </div>
-              <div className="temp-reading"><span>{temperature.toFixed(1)}</span><sup>deg C</sup></div>
-              <div className="status-bar"><span style={{ width: `${Math.min(100, Math.max(0, ((temperature - 2) / 6) * 100))}%` }} /></div>
-              <div className="status-limits"><span>02.0</span><span>SAFE CORRIDOR</span><span>08.0</span></div>
-              <button className={`monitor-button ${isMonitoring ? "pause" : "start"}`} onClick={() => setIsMonitoring((current) => !current)}>
-                <span aria-hidden="true">{isMonitoring ? "||" : ">"}</span>
-                {isMonitoring ? "PAUSE SIMULATION" : "RESUME SIMULATION"}
+        <div className="p-2">
+          {matches.length === 0 ? (
+            <p className="px-3 py-6 text-center text-[13px] text-ink-muted">
+              No command matches “{query}”.
+            </p>
+          ) : (
+            matches.map((command) => (
+              <button
+                key={command.path}
+                type="button"
+                onClick={() => go(command.path)}
+                className="flex w-full items-center gap-2.5 rounded-md px-3 py-2.5 text-left transition-colors hover:bg-sunken"
+              >
+                <command.icon size={15} className="text-ink-subtle" aria-hidden="true" />
+                <span className="text-[13.5px] font-medium text-ink">{command.label}</span>
+                <span className="ml-auto font-mono text-[12px] text-ink-subtle">{command.path}</span>
               </button>
-              <div className="panel-foot"><span aria-hidden="true">o</span> SAMPLE EVERY 02 SEC <span>/</span> NEXT LEDGER APPEND 09 SEC</div>
+            ))
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function Header({ isDark, onToggleTheme }: { isDark: boolean; onToggleTheme: () => void }) {
+  const { status, isMonitoring, unreadNotificationCount, notifications, markNotificationsRead } =
+    useColdChain();
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [commandOpen, setCommandOpen] = useState(false);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+
+  // A single owner for ⌘K, so it can never stack a second dialog on top of an
+  // open one. `event.key` is optional on some IME/Android events — guard it.
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (typeof event.key !== "string") return;
+      if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== "k") return;
+      event.preventDefault();
+      setHelpOpen(false);
+      setNotificationsOpen(false);
+      setCommandOpen((previous) => !previous);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
+  const openNotifications = useCallback(() => {
+    setNotificationsOpen(true);
+    markNotificationsRead();
+  }, [markNotificationsRead]);
+
+  const liveState = !isMonitoring ? "paused" : status === "EXCURSION" ? "excursion" : "live";
+  const liveLabel = liveState === "paused" ? "PAUSED" : liveState === "excursion" ? "EXCURSION" : "LIVE";
+
+  return (
+    <header className="sticky top-0 z-40 border-b border-line bg-surface/85 backdrop-blur-md">
+      <div className={PAGE_CONTAINER}>
+        <div className="grid h-16 grid-cols-[1fr_auto] items-center gap-4 md:grid-cols-[1fr_auto_1fr]">
+          {/* Brand */}
+          <Link to="/" className="flex min-w-0 items-center gap-2.5 justify-self-start" aria-label="Vault home">
+            <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-brand text-primary-foreground">
+              <Package size={17} strokeWidth={2} aria-hidden="true" />
+            </span>
+            <span className="min-w-0 leading-none">
+              <span className="flex items-center gap-2">
+                <span className="text-[15px] font-semibold tracking-[-0.01em] text-ink">Vault</span>
+                <span className="hidden rounded border border-line px-1.5 py-px text-[10px] font-semibold uppercase tracking-[0.06em] text-ink-subtle xl:inline">
+                  Prototype
+                </span>
+              </span>
+              <span className="mt-1 block truncate font-mono text-[11px] text-ink-subtle">
+                Cold-chain 01
+              </span>
+            </span>
+          </Link>
+
+          {/* Primary nav */}
+          <nav
+            className="hidden h-9 items-center gap-0.5 justify-self-center rounded-lg border border-line bg-sunken p-0.5 md:flex"
+            aria-label="Primary"
+          >
+            {NAV_ITEMS.map((item) => (
+              <NavLink key={item.to} to={item.to} className={navLinkClass}>
+                <item.icon size={15} aria-hidden="true" />
+                {item.label}
+              </NavLink>
+            ))}
+          </nav>
+
+          {/* Actions */}
+          <div className="flex items-center gap-2 justify-self-end">
+            <button
+              type="button"
+              onClick={() => setCommandOpen(true)}
+              className="hidden h-9 w-[190px] items-center gap-2 rounded-lg border border-line bg-raised px-2.5 text-left transition-colors hover:border-line-strong lg:flex"
+            >
+              <Search size={15} className="shrink-0 text-ink-subtle" aria-hidden="true" />
+              <span className="truncate whitespace-nowrap text-[13px] text-ink-subtle">Search</span>
+              <span className="ml-auto shrink-0 whitespace-nowrap rounded border border-line px-1.5 font-mono text-[11px] leading-[18px] text-ink-subtle">
+                ⌘K
+              </span>
+            </button>
+
+            <span
+              className="hidden h-9 items-center gap-2 whitespace-nowrap rounded-lg border border-line bg-raised px-3 sm:inline-flex"
+              title="Local simulation — a reading every 2 seconds"
+            >
+              <span className="live-dot" data-state={liveState} />
+              <span className="text-[12px] font-semibold tracking-[0.04em] text-ink">{liveLabel}</span>
+              <span className="hidden font-mono text-[11.5px] text-ink-subtle 2xl:inline">
+                local sim
+              </span>
+            </span>
+
+            <div className="flex h-9 items-center rounded-lg border border-line bg-raised px-0.5">
+              <button
+                type="button"
+                onClick={onToggleTheme}
+                className="grid h-8 w-8 place-items-center rounded-md text-ink-muted transition-colors hover:bg-sunken hover:text-ink"
+                aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
+              >
+                {isDark ? <Sun size={16} aria-hidden="true" /> : <Moon size={16} aria-hidden="true" />}
+              </button>
+              <span className="h-4 w-px bg-line" aria-hidden="true" />
+              <button
+                type="button"
+                onClick={openNotifications}
+                className="relative grid h-8 w-8 place-items-center rounded-md text-ink-muted transition-colors hover:bg-sunken hover:text-ink"
+                aria-label={
+                  unreadNotificationCount > 0
+                    ? `Notifications, ${unreadNotificationCount} unread`
+                    : "Notifications"
+                }
+              >
+                <Bell size={16} aria-hidden="true" />
+                {unreadNotificationCount > 0 && (
+                  <span className="absolute right-1.5 top-1.5 h-1.5 w-1.5 rounded-full bg-warning ring-2 ring-raised" />
+                )}
+              </button>
+              <span className="h-4 w-px bg-line" aria-hidden="true" />
+              <button
+                type="button"
+                onClick={() => setHelpOpen(true)}
+                className="grid h-8 w-8 place-items-center rounded-md text-ink-muted transition-colors hover:bg-sunken hover:text-ink"
+                aria-label="How Vault works"
+              >
+                <CircleHelp size={16} aria-hidden="true" />
+              </button>
             </div>
 
-            <div className="chart-panel">
-              <div className="chart-head"><div><span className="eyebrow">TEMPERATURE HISTORY / LAST 16 MIN</span><div className="chart-title"><span className="chart-key" /> Live reading</div></div><span className="mono chart-unit">CELSIUS / deg C</span></div>
-              <div className="chart-area">
-                <div className="chart-y-labels mono"><span>08</span><span>06</span><span>04</span><span>02</span></div>
-                <svg viewBox="0 0 720 190" role="img" aria-label="Temperature chart showing readings between 4.6 and 4.9 degrees Celsius" preserveAspectRatio="none">
-                  <rect x="0" y="0" width="720" height="190" fill="rgba(22, 135, 93, 0.06)" />
-                  {[0, 63.3, 126.6, 190].map((y) => <line key={y} x1="0" x2="720" y1={y} y2={y} className="chart-gridline" />)}
-                  <line x1="0" x2="720" y1="0" y2="0" className="threshold-line" />
-                  <line x1="0" x2="720" y1="190" y2="190" className="threshold-line" />
-                  <path d={chartPath} className="chart-path" />
-                  {readings.map((reading, index) => {
-                    const x = (index / Math.max(readings.length - 1, 1)) * 720;
-                    const y = 190 - ((reading.value - 2) / 6) * 190;
-                    return <circle key={`${reading.time}-${index}`} cx={x} cy={y} r={index === readings.length - 1 ? 5 : 2.5} className={index === readings.length - 1 ? "chart-point active" : "chart-point"} />;
-                  })}
-                </svg>
-              </div>
-              <div className="chart-x-labels mono"><span>14:06</span><span>14:10</span><span>14:14</span><span>14:18</span><span>NOW</span></div>
-              <div className={`chart-callout ${status.toLowerCase()}`}><span className="callout-marker" /> {status === "SAFE" ? "SAFE - no excursion detected in current window" : "EXCURSION - reading outside safe corridor"} <span aria-hidden="true">-&gt;</span></div>
+            <div
+              className="hidden items-center gap-2 border-l border-line pl-2 xl:flex"
+              title="Demo account — this prototype has no authentication"
+            >
+              <span className="grid h-8 w-8 place-items-center rounded-full bg-sunken font-mono text-[12px] font-semibold text-ink-muted">
+                {DEMO_OPERATOR.initials}
+              </span>
+              <span className="leading-none">
+                <span className="block whitespace-nowrap text-[13px] font-medium text-ink">
+                  {DEMO_OPERATOR.name}
+                </span>
+                <span className="mt-1 block whitespace-nowrap text-[11.5px] text-ink-subtle">
+                  {DEMO_OPERATOR.role}
+                </span>
+              </span>
+              <ChevronDown size={14} className="text-ink-subtle" aria-hidden="true" />
             </div>
           </div>
-        </section>
+        </div>
+      </div>
 
-        <section className="ledger-section" id="ledger">
-          <div className="section-heading ledger-heading"><div><div className="eyebrow">02 / IMMUTABLE TRAIL</div><h2>Every reading leaves a mark.</h2></div><a className="text-link" href="#ledger">OPEN FULL LEDGER <span aria-hidden="true">&gt;</span></a></div>
-          <div className="ledger-table" role="table" aria-label="Recent ledger entries">
-            <div className="ledger-row ledger-header" role="row"><span>SEQ</span><span>ENTRY TYPE</span><span>UTC TIMESTAMP</span><span>STATUS</span><span>HASH</span></div>
-            {ledgerRows.map((row, index) => <div className="ledger-row" role="row" key={row.sequence}><span className="mono teal-text">{row.sequence}</span><span className="event-name">{row.event}</span><span className="mono">2026-08-26 / {row.time}</span><span><span className="valid-tag"><span />{row.status}</span></span><span className="mono hash">{index === 0 ? "8f2a...c91d" : index === 1 ? "2b11...0a48" : "b728...f0e2"}</span></div>)}
-          </div>
-        </section>
+      {/* Mobile nav */}
+      <div className="border-t border-line bg-surface md:hidden">
+        <nav className={`${PAGE_CONTAINER} flex gap-1 py-2`} aria-label="Primary, mobile">
+          {NAV_ITEMS.map((item) => (
+            <NavLink key={item.to} to={item.to} className={mobileNavLinkClass}>
+              <item.icon size={15} aria-hidden="true" />
+              {item.label}
+            </NavLink>
+          ))}
+        </nav>
+      </div>
 
-        <footer className="footer"><span className="mono">VAULT / FRONTEND PROTOTYPE</span><span>Designed for a future sensor, ready for today's handoff.</span><span className="mono">BUILD 0.1.0 <span className="footer-square" /></span></footer>
+      <CommandPalette open={commandOpen} onOpenChange={setCommandOpen} />
+      <HelpDialog open={helpOpen} onOpenChange={setHelpOpen} />
+      <NotificationsDialog
+        open={notificationsOpen}
+        onOpenChange={setNotificationsOpen}
+        entries={notifications}
+      />
+    </header>
+  );
+}
+
+function Layout({ isDark, onToggleTheme }: { isDark: boolean; onToggleTheme: () => void }) {
+  const location = useLocation();
+
+  // One restrained fade per route change. Header chrome is deliberately not
+  // animated — it persists, so animating it on every mount reads as noise.
+  useEffect(() => {
+    if (prefersReducedMotion()) return undefined;
+    const target = ".page-content";
+    anime({ targets: target, translateY: [6, 0], opacity: [0, 1], duration: 320, easing: "easeOutQuad" });
+    return () => anime.remove(target);
+  }, [location.pathname]);
+
+  return (
+    <div className="flex min-h-screen flex-col bg-surface">
+      <Header isDark={isDark} onToggleTheme={onToggleTheme} />
+
+      <main className={`${PAGE_CONTAINER} page-content flex-1 py-8`}>
+        <Outlet />
       </main>
+
+      <footer className="border-t border-line">
+        <div
+          className={`${PAGE_CONTAINER} flex flex-col gap-1 py-5 text-[12.5px] text-ink-subtle sm:flex-row sm:items-center sm:justify-between`}
+        >
+          <span>Vault — frontend prototype, local simulation.</span>
+          <span className="font-mono">Build 0.1.0</span>
+        </div>
+      </footer>
     </div>
   );
 }
 
-export default App;
+export default function App() {
+  const [isDark, setIsDark] = useState<boolean>(() => {
+    // index.html has already applied the class before first paint; read it back
+    // so React starts in agreement with the DOM.
+    if (typeof document !== "undefined") {
+      return document.documentElement.classList.contains("dark");
+    }
+    return false;
+  });
+
+  // One piece of state, three stages. Two booleans that had to agree meant a
+  // synchronous setState inside an effect to keep them in sync.
+  const [loader, setLoader] = useState<"visible" | "fading" | "gone">("visible");
+
+  useEffect(() => {
+    const root = document.documentElement;
+    root.classList.toggle("dark", isDark);
+    root.style.colorScheme = isDark ? "dark" : "light";
+    try {
+      window.localStorage.setItem("vault:theme", isDark ? "dark" : "light");
+    } catch {
+      // Storage unavailable — the theme still applies for this session.
+    }
+  }, [isDark]);
+
+  const finishLoading = useCallback(() => {
+    setLoader(prefersReducedMotion() ? "gone" : "fading");
+  }, []);
+
+  useEffect(() => {
+    if (loader !== "fading") return undefined;
+    const target = ".loading-screen";
+    anime({
+      targets: target,
+      opacity: [1, 0],
+      duration: 320,
+      easing: "easeInOutQuad",
+      complete: () => setLoader("gone"),
+    });
+    return () => anime.remove(target);
+  }, [loader]);
+
+  const toggleTheme = useCallback(() => setIsDark((previous) => !previous), []);
+
+  return (
+    <>
+      {loader !== "gone" && <LoadingScreen onFinished={finishLoading} />}
+      <ColdChainProvider>
+        <Layout isDark={isDark} onToggleTheme={toggleTheme} />
+      </ColdChainProvider>
+    </>
+  );
+}

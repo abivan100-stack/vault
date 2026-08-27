@@ -1,0 +1,320 @@
+import { useState } from "react";
+import { Pause, Play } from "lucide-react";
+import { useColdChain } from "@/context/ColdChainContext";
+import { Button } from "@/components/ui/button";
+import {
+  CHART_HEIGHT,
+  CHART_TICKS,
+  CHART_WIDTH,
+  CHART_MAX_C,
+  CHART_MIN_C,
+  SAFE_MAX_C,
+  SAFE_MIN_C,
+  isExcursion,
+  toChartX,
+  toChartY,
+  toDomainPercent,
+} from "@/lib/chart";
+import { chartXLabels, formatClock, formatWindowLabel } from "@/lib/simulation";
+
+function StatusPill({ status }: { status: "SAFE" | "EXCURSION" }) {
+  const isSafe = status === "SAFE";
+  return (
+    <span
+      className={`inline-flex h-6 items-center rounded-md px-2 text-[11.5px] font-semibold tracking-[0.04em] ${
+        isSafe ? "bg-success-soft text-success" : "bg-warning-soft text-warning"
+      }`}
+    >
+      {status}
+    </span>
+  );
+}
+
+export default function MonitorPage() {
+  const {
+    temperature,
+    status,
+    isMonitoring,
+    setIsMonitoring,
+    readings,
+    chartPath,
+    lastSyncAt,
+    secondsUntilLedgerAppend,
+  } = useColdChain();
+  const [hoveredId, setHoveredId] = useState<number | null>(null);
+
+  const hoveredIndex = hoveredId === null ? -1 : readings.findIndex((r) => r.id === hoveredId);
+  const hoveredReading = hoveredIndex >= 0 ? readings[hoveredIndex] : null;
+
+  const values = readings.map((reading) => reading.value);
+  const minValue = values.length > 0 ? Math.min(...values) : temperature;
+  const maxValue = values.length > 0 ? Math.max(...values) : temperature;
+  const excursionCount = values.filter(isExcursion).length;
+  const outOfCorridor = isExcursion(temperature);
+
+  const xLabels = chartXLabels(readings);
+
+  return (
+    <div className="space-y-6">
+      <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="text-[21px] font-semibold tracking-[-0.02em] text-ink">Monitor</h1>
+          <p className="mt-1 text-[13.5px] text-ink-muted">
+            Live corridor for the box in transit. A reading every 2 seconds.
+          </p>
+        </div>
+        <p className="tabular font-mono text-[12px] text-ink-subtle">
+          Last sync {lastSyncAt ? formatClock(lastSyncAt) : "—"}
+        </p>
+      </header>
+
+      <div className="grid gap-4 lg:grid-cols-[300px_1fr] lg:items-start">
+        {/* Gauge */}
+        <section className="rounded-xl border border-line bg-raised p-5">
+          <div className="flex items-center justify-between">
+            <h2 className="eyebrow">Current reading</h2>
+            <StatusPill status={status} />
+          </div>
+
+          <p className="mt-4 flex items-baseline gap-1.5">
+            <span
+              className={`tabular text-[46px] font-semibold leading-none tracking-[-0.04em] ${
+                outOfCorridor ? "text-warning" : "text-ink"
+              }`}
+            >
+              {temperature.toFixed(1)}
+            </span>
+            <span className="text-[15px] font-medium text-ink-subtle">°C</span>
+          </p>
+
+          {/* Position within the full simulated domain, with the safe corridor
+              highlighted — an excursion sits visibly outside the band. */}
+          <div className="mt-5">
+            <div className="relative h-2 rounded-full bg-sunken">
+              <div
+                className="absolute inset-y-0 rounded-full bg-brand-soft"
+                style={{
+                  left: `${toDomainPercent(SAFE_MIN_C)}%`,
+                  right: `${100 - toDomainPercent(SAFE_MAX_C)}%`,
+                }}
+              />
+              <div
+                className="absolute top-1/2 h-4 w-4 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-raised transition-[left] duration-500 ease-out"
+                style={{
+                  left: `${toDomainPercent(temperature)}%`,
+                  backgroundColor: outOfCorridor ? "var(--warning)" : "var(--brand)",
+                }}
+              />
+            </div>
+            <div className="tabular mt-2 flex justify-between font-mono text-[11px] text-ink-subtle">
+              <span>{CHART_MIN_C.toFixed(1)}</span>
+              <span className="text-ink-muted">
+                safe {SAFE_MIN_C.toFixed(1)}–{SAFE_MAX_C.toFixed(1)}
+              </span>
+              <span>{CHART_MAX_C.toFixed(1)}</span>
+            </div>
+          </div>
+
+          <dl className="mt-5 grid grid-cols-3 gap-3 border-t border-line pt-4">
+            <div>
+              <dt className="text-[11px] text-ink-subtle">Low</dt>
+              <dd className="tabular mt-0.5 font-mono text-[13px] font-medium text-ink">
+                {minValue.toFixed(1)}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-[11px] text-ink-subtle">High</dt>
+              <dd className="tabular mt-0.5 font-mono text-[13px] font-medium text-ink">
+                {maxValue.toFixed(1)}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-[11px] text-ink-subtle">Excursions</dt>
+              <dd
+                className={`tabular mt-0.5 font-mono text-[13px] font-medium ${
+                  excursionCount > 0 ? "text-warning" : "text-ink"
+                }`}
+              >
+                {excursionCount}
+              </dd>
+            </div>
+          </dl>
+
+          <Button
+            variant={isMonitoring ? "outline" : "default"}
+            onClick={() => setIsMonitoring((current) => !current)}
+            className="mt-5 h-9 w-full gap-2 text-sm"
+          >
+            {isMonitoring ? <Pause size={15} aria-hidden="true" /> : <Play size={15} aria-hidden="true" />}
+            {isMonitoring ? "Pause simulation" : "Resume simulation"}
+          </Button>
+
+          <p className="tabular mt-3 text-center font-mono text-[11.5px] text-ink-subtle">
+            {isMonitoring
+              ? `Next ledger append in ${secondsUntilLedgerAppend}s`
+              : "Paused — no readings, no ledger appends"}
+          </p>
+        </section>
+
+        {/* Chart */}
+        <section className="rounded-xl border border-line bg-raised p-5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h2 className="eyebrow">Temperature history</h2>
+              <p className="mt-1 text-[13.5px] text-ink-muted">
+                {formatWindowLabel(readings).toLowerCase()} · {readings.length} readings
+              </p>
+            </div>
+            <span className="font-mono text-[11.5px] text-ink-subtle">°C</span>
+          </div>
+
+          <div className="relative mt-5 pl-8">
+            {/* Axis labels sit at their true value, not at even spacing. */}
+            <div className="pointer-events-none absolute inset-y-0 left-0 w-7">
+              {CHART_TICKS.map((tick) => (
+                <span
+                  key={tick}
+                  className="tabular absolute right-0 -translate-y-1/2 font-mono text-[11px] text-ink-subtle"
+                  style={{ top: `${toChartY(tick, 100)}%` }}
+                >
+                  {tick.toFixed(1)}
+                </span>
+              ))}
+            </div>
+
+            <div className="relative h-[190px]" onMouseLeave={() => setHoveredId(null)}>
+              <svg
+                viewBox={`0 0 ${CHART_WIDTH} ${CHART_HEIGHT}`}
+                preserveAspectRatio="none"
+                className="h-full w-full overflow-visible"
+                role="img"
+                aria-label={`Temperature history: ${readings.length} readings between ${minValue.toFixed(1)} and ${maxValue.toFixed(1)} degrees Celsius, currently ${temperature.toFixed(1)}, status ${status}.`}
+              >
+                {/* Safe corridor band */}
+                <rect
+                  x="0"
+                  width={CHART_WIDTH}
+                  y={toChartY(SAFE_MAX_C)}
+                  height={toChartY(SAFE_MIN_C) - toChartY(SAFE_MAX_C)}
+                  className="chart-band"
+                />
+
+                {CHART_TICKS.map((tick) => (
+                  <line
+                    key={tick}
+                    x1="0"
+                    x2={CHART_WIDTH}
+                    y1={toChartY(tick)}
+                    y2={toChartY(tick)}
+                    className="chart-gridline"
+                  />
+                ))}
+
+                {[SAFE_MIN_C, SAFE_MAX_C].map((limit) => (
+                  <line
+                    key={limit}
+                    x1="0"
+                    x2={CHART_WIDTH}
+                    y1={toChartY(limit)}
+                    y2={toChartY(limit)}
+                    className="chart-threshold"
+                  />
+                ))}
+
+                {hoveredReading && (
+                  <line
+                    x1={toChartX(hoveredIndex, readings.length)}
+                    x2={toChartX(hoveredIndex, readings.length)}
+                    y1={0}
+                    y2={CHART_HEIGHT}
+                    className="chart-cursor"
+                  />
+                )}
+
+                <path d={chartPath} className="chart-path" />
+
+                {readings.map((reading, index) => {
+                  const x = toChartX(index, readings.length);
+                  const y = toChartY(reading.value);
+                  const isHovered = reading.id === hoveredId;
+                  const isLatest = index === readings.length - 1;
+                  const classes = [
+                    "chart-point",
+                    isHovered ? "hovered" : "",
+                    isLatest ? "active" : "",
+                    isExcursion(reading.value) ? "excursion" : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" ");
+
+                  return (
+                    // Keyed by the reading's stable id: the window slides every
+                    // 2s, so an index-based key would remount every point and
+                    // drop the hover target out from under the cursor.
+                    <g key={reading.id}>
+                      <circle
+                        cx={x}
+                        cy={y}
+                        r={13}
+                        className="chart-hit"
+                        tabIndex={0}
+                        role="img"
+                        aria-label={`${formatClock(reading.at)}: ${reading.value.toFixed(1)} degrees Celsius`}
+                        onMouseEnter={() => setHoveredId(reading.id)}
+                        onFocus={() => setHoveredId(reading.id)}
+                        onBlur={() => setHoveredId(null)}
+                      />
+                      <circle
+                        cx={x}
+                        cy={y}
+                        r={isHovered ? 5.5 : isLatest ? 4 : 2.5}
+                        className={classes}
+                        style={{ pointerEvents: "none" }}
+                      />
+                    </g>
+                  );
+                })}
+              </svg>
+
+              {hoveredReading && (
+                <div
+                  className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-[calc(100%+10px)] rounded-lg border border-line bg-raised px-2.5 py-2 shadow-sm"
+                  style={{
+                    left: `${toChartX(hoveredIndex, readings.length, 100)}%`,
+                    top: `${toChartY(hoveredReading.value, 100)}%`,
+                  }}
+                >
+                  <p className="tabular font-mono text-[11px] text-ink-subtle">
+                    {formatClock(hoveredReading.at)}
+                  </p>
+                  <p className="mt-0.5 flex items-baseline gap-1">
+                    <span
+                      className={`tabular font-mono text-[15px] font-semibold ${
+                        isExcursion(hoveredReading.value) ? "text-warning" : "text-ink"
+                      }`}
+                    >
+                      {hoveredReading.value.toFixed(1)}
+                    </span>
+                    <span className="font-mono text-[11px] text-ink-subtle">°C</span>
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div className="tabular mt-2 flex justify-between font-mono text-[11px] text-ink-subtle">
+              {xLabels.map((label, index) => (
+                <span key={`${label}-${index}`}>{label}</span>
+              ))}
+            </div>
+          </div>
+
+          <p className="mt-4 border-t border-line pt-3 text-[13px] text-ink-muted">
+            {outOfCorridor
+              ? `Outside the ${SAFE_MIN_C}–${SAFE_MAX_C} °C corridor — an excursion is open on the ledger.`
+              : `Inside the ${SAFE_MIN_C}–${SAFE_MAX_C} °C corridor. Hover a point for the exact reading.`}
+          </p>
+        </section>
+      </div>
+    </div>
+  );
+}
