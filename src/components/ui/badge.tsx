@@ -20,10 +20,10 @@ const badgeVariants = cva(
           "hover:bg-muted hover:text-muted-foreground dark:hover:bg-muted/50",
         link: "text-primary underline-offset-4 hover:underline",
         // Soft status tones — the pairs the pages already use for state.
-        success: "bg-success-soft text-success",
-        warning: "bg-warning-soft text-warning",
-        brand: "bg-brand-soft text-brand-ink",
-        neutral: "bg-sunken text-ink-muted",
+        success: "border-success-line bg-success-soft text-success",
+        warning: "border-warning-line bg-warning-soft text-warning",
+        brand: "border-brand-line bg-brand-soft text-brand-ink",
+        neutral: "border-line bg-sunken text-ink-muted",
       },
     },
     defaultVariants: {

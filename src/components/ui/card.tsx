@@ -21,7 +21,7 @@ function Card({
       {
         className: cn(
           "rounded-xl border border-line",
-          surface === "sunken" ? "bg-sunken" : "bg-raised",
+          surface === "sunken" ? "bg-sunken" : "bg-raised shadow-e1",
           className
         ),
       },
