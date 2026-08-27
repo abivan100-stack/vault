@@ -15,6 +15,8 @@ export const LEDGER_EVENTS = [
   "EXCURSION_OPEN",
   "EXCURSION_CLEAR",
   "HANDOFF_INIT",
+  "INVESTIGATION_OPEN",
+  "INVESTIGATION_RESOLVED",
 ] as const;
 
 export type LedgerEventType = (typeof LEDGER_EVENTS)[number];
@@ -144,11 +146,119 @@ export function formatEventLabel(event: string): string {
   return event.replace(/_/g, " ");
 }
 
+/**
+ * Reason chosen when resolving an Investigation. Structured rather than
+ * freeform so investigations stay queryable (e.g. "how many were sensor
+ * faults vs confirmed loss"), paired with a required freeform note.
+ */
+export const RESOLUTION_REASONS = [
+  { value: "SENSOR_FAULT", label: "Sensor fault" },
+  { value: "CARRIER_DELAY", label: "Carrier delay" },
+  { value: "CONFIRMED_LOSS", label: "Confirmed loss" },
+  { value: "OTHER", label: "Other" },
+] as const;
+
+export type ResolutionReason = (typeof RESOLUTION_REASONS)[number]["value"];
+
+export function resolutionReasonLabel(reason: ResolutionReason): string {
+  return RESOLUTION_REASONS.find((entry) => entry.value === reason)?.label ?? reason;
+}
+
+export type InvestigationStatus = "CLEARED" | "UNDER_INVESTIGATION";
+
+export type InvestigationState = {
+  status: InvestigationStatus;
+  /** The still-open `INVESTIGATION_OPEN` entry, or null when Cleared. */
+  openEntry: LedgerEntry | null;
+};
+
+/**
+ * Whether the shipment is currently Cleared or Under Investigation, derived
+ * from the ledger itself rather than tracked as separate state — the newest
+ * `INVESTIGATION_OPEN`/`INVESTIGATION_RESOLVED` pair is authoritative.
+ *
+ * This is deliberately independent of `verifyChain`: a chain can be Intact
+ * and Under Investigation at the same time, or Cleared and broken. One is a
+ * cryptographic fact, the other a workflow fact.
+ *
+ * An Investigation cannot span a `SHIPMENT_CREATE`: it is scoped to the
+ * shipment it was opened against, so a new shipment always starts Cleared,
+ * even if the previous one's Investigation was never resolved. That old
+ * Investigation stays truthfully recorded as unresolved on the prior
+ * shipment's portion of the trail — this only stops it from blocking the
+ * *current* one.
+ */
+export function deriveInvestigationState(chain: readonly LedgerEntry[]): InvestigationState {
+  let openEntry: LedgerEntry | null = null;
+  for (const entry of chain) {
+    if (entry.event === "SHIPMENT_CREATE") openEntry = null;
+    else if (entry.event === "INVESTIGATION_OPEN") openEntry = entry;
+    else if (entry.event === "INVESTIGATION_RESOLVED") openEntry = null;
+  }
+  return { status: openEntry ? "UNDER_INVESTIGATION" : "CLEARED", openEntry };
+}
+
+/**
+ * Sequence numbers of every `EXCURSION_OPEN` at or after `sinceSequence`.
+ *
+ * An open Investigation absorbs further breaches rather than spawning a new
+ * Investigation per breach — this is how the absorbed set is recovered for
+ * display and for the resolution note.
+ */
+export function coveredExcursionSequences(
+  chain: readonly LedgerEntry[],
+  sinceSequence: number,
+): number[] {
+  return chain
+    .filter((entry) => entry.event === "EXCURSION_OPEN" && entry.sequence >= sinceSequence)
+    .map((entry) => entry.sequence);
+}
+
 export function isLedgerEventType(value: unknown): value is LedgerEventType {
   return typeof value === "string" && (LEDGER_EVENTS as readonly string[]).includes(value);
 }
 
 const HEX_64 = /^[0-9a-f]{64}$/;
+
+/** Structural validation for one untrusted (stored) value as a `LedgerEntry`. */
+export function isLedgerEntry(value: unknown): value is LedgerEntry {
+  if (typeof value !== "object" || value === null) return false;
+  const candidate = value as Record<string, unknown>;
+  return (
+    // Sequence numbers are 1-based integers. Without this a re-rooted entry
+    // claiming sequence 0, -1 or 1.5 would skip the genesis root check and,
+    // as a lone entry, the ordering check too.
+    typeof candidate.sequence === "number" &&
+    Number.isInteger(candidate.sequence) &&
+    candidate.sequence >= 1 &&
+    isLedgerEventType(candidate.event) &&
+    typeof candidate.at === "string" &&
+    !Number.isNaN(new Date(candidate.at).getTime()) &&
+    typeof candidate.detail === "string" &&
+    typeof candidate.prevHash === "string" &&
+    HEX_64.test(candidate.prevHash) &&
+    typeof candidate.hash === "string" &&
+    HEX_64.test(candidate.hash)
+  );
+}
+
+/**
+ * Whether this (possibly truncated) window contains any event that bears on
+ * Cleared/Under Investigation — a `SHIPMENT_CREATE`, `INVESTIGATION_OPEN` or
+ * `INVESTIGATION_RESOLVED`. When it does, `deriveInvestigationState` is
+ * authoritative. When it does not, the window cannot distinguish "genuinely
+ * Cleared" from "an Investigation opened before this window's horizon and
+ * aged out while still open" — callers should fall back to a separately
+ * persisted last-known status in that case (see ColdChainContext).
+ */
+export function hasInvestigationEvidence(chain: readonly LedgerEntry[]): boolean {
+  return chain.some(
+    (entry) =>
+      entry.event === "SHIPMENT_CREATE" ||
+      entry.event === "INVESTIGATION_OPEN" ||
+      entry.event === "INVESTIGATION_RESOLVED",
+  );
+}
 
 export type ParsedChain = {
   entries: LedgerEntry[];
@@ -175,37 +285,17 @@ export function parseChain(raw: unknown): ParsedChain {
   let discarded = 0;
 
   for (const item of raw) {
-    if (typeof item !== "object" || item === null) {
-      discarded += 1;
-      continue;
-    }
-    const candidate = item as Record<string, unknown>;
-    if (
-      // Sequence numbers are 1-based integers. Without this a re-rooted entry
-      // claiming sequence 0, -1 or 1.5 would skip the genesis root check and,
-      // as a lone entry, the ordering check too.
-      typeof candidate.sequence !== "number" ||
-      !Number.isInteger(candidate.sequence) ||
-      candidate.sequence < 1 ||
-      !isLedgerEventType(candidate.event) ||
-      typeof candidate.at !== "string" ||
-      Number.isNaN(new Date(candidate.at).getTime()) ||
-      typeof candidate.detail !== "string" ||
-      typeof candidate.prevHash !== "string" ||
-      !HEX_64.test(candidate.prevHash) ||
-      typeof candidate.hash !== "string" ||
-      !HEX_64.test(candidate.hash)
-    ) {
+    if (!isLedgerEntry(item)) {
       discarded += 1;
       continue;
     }
     entries.push({
-      sequence: candidate.sequence,
-      event: candidate.event,
-      at: candidate.at,
-      detail: candidate.detail,
-      prevHash: candidate.prevHash,
-      hash: candidate.hash,
+      sequence: item.sequence,
+      event: item.event,
+      at: item.at,
+      detail: item.detail,
+      prevHash: item.prevHash,
+      hash: item.hash,
     });
   }
 
