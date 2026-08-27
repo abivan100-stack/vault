@@ -32,7 +32,7 @@
      --raised, so secondary text stays information rather than texture. */
   --ink: #1c1e1b;
   --ink-muted: #4d5250;
-  --ink-subtle: #676b65;
+  --ink-subtle: #5f635d;
 
   /* Brand. A ramp rather than one value doing four jobs: a fill, its hover, a
      text-safe shade, a tint, and a border for that tint. */
