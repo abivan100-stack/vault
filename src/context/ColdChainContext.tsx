@@ -8,7 +8,14 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { buildChartPath, clampToCorridor, statusFor, type Status } from "@/lib/chart";
+import {
+  SAFE_MAX_C,
+  SAFE_MIN_C,
+  buildChartPath,
+  clampToCorridor,
+  statusFor,
+  type Status,
+} from "@/lib/chart";
 import {
   appendEntry,
   coveredExcursionSequences,
@@ -36,6 +43,7 @@ import {
   LEDGER_INTERVAL_MS,
   READING_WINDOW,
   SAMPLE_INTERVAL_MS,
+  forcedDrift,
   nextTemperature,
   pushReading,
   randomDrift,
@@ -177,6 +185,10 @@ type ColdChainValue = {
   status: Status;
   isMonitoring: boolean;
   setIsMonitoring: (value: boolean | ((previous: boolean) => boolean)) => void;
+  /** True between asking for an excursion and the corridor actually breaking. */
+  isForcingExcursion: boolean;
+  /** Drives the next readings out of the corridor. See `forceExcursion`. */
+  forceExcursion: () => void;
   readings: Reading[];
   chartPath: string;
   /** ISO instant of the most recent sample. */
@@ -204,6 +216,16 @@ const ColdChainContext = createContext<ColdChainValue | null>(null);
 
 export function ColdChainProvider({ children }: { children: ReactNode }) {
   const [isMonitoring, setIsMonitoring] = useState(true);
+  /**
+   * Whether the simulation is currently being driven out of the corridor.
+   *
+   * An excursion is the one state this console exists to surface, and waiting
+   * for a random walk to produce one is not a demonstration. The state is
+   * mirrored into a ref because the interval callback reads it from a closure
+   * that would otherwise be a render behind.
+   */
+  const [isForcingExcursion, setIsForcingExcursion] = useState(false);
+  const forcingExcursionRef = useRef(false);
   const [readings, setReadings] = useState<Reading[]>(() => seedReadings(new Date()));
 
   const [fieldLogMeta, setFieldLogMeta] = useState<FieldLogMeta>(() => {
@@ -354,7 +376,11 @@ export function ColdChainProvider({ children }: { children: ReactNode }) {
     const interval = window.setInterval(() => {
       // Every impure step happens here, outside the state updaters below.
       const at = new Date();
-      const value = nextTemperature(latestValueRef.current, randomDrift());
+      const forcing = forcingExcursionRef.current;
+      const drift = forcing
+        ? forcedDrift(latestValueRef.current, SAFE_MIN_C, SAFE_MAX_C)
+        : randomDrift();
+      const value = nextTemperature(latestValueRef.current, drift);
       latestValueRef.current = value;
 
       const reading: Reading = { id: nextReadingIdRef.current, at: at.toISOString(), value };
@@ -362,12 +388,23 @@ export function ColdChainProvider({ children }: { children: ReactNode }) {
       setReadings((previous) => pushReading(previous, reading));
 
       const nextStatus = statusFor(value);
+      if (nextStatus === "EXCURSION" && forcing) {
+        // The forcing drift stops the moment the corridor actually breaks;
+        // from there the walk is random again and recovers on its own.
+        forcingExcursionRef.current = false;
+        setIsForcingExcursion(false);
+      }
+
       if (nextStatus !== statusRef.current) {
         statusRef.current = nextStatus;
         const movement = nextStatus === "EXCURSION" ? "left" : "back inside";
+        // An operator-induced excursion is recorded as such. The reading is
+        // real either way, but a trail that could not distinguish the two
+        // would be a trail asserting more than it knows.
+        const cause = nextStatus === "EXCURSION" && forcing ? " (operator-induced)" : "";
         appendLedger(
           nextStatus === "EXCURSION" ? "EXCURSION_OPEN" : "EXCURSION_CLEAR",
-          `${value.toFixed(1)} °C — ${movement} safe corridor`,
+          `${value.toFixed(1)} °C — ${movement} safe corridor${cause}`,
           at,
         );
 
@@ -401,6 +438,17 @@ export function ColdChainProvider({ children }: { children: ReactNode }) {
   // updater argument. Appending to the ledger is a side effect, and a state
   // updater must stay pure — React 18 StrictMode invokes it twice, which would
   // write two ledger entries (and two notifications) per user action.
+  /**
+   * Arms the forcing drift. Idempotent, and a no-op once the corridor has
+   * already broken — a second request while an excursion is open would have
+   * nothing left to force.
+   */
+  const forceExcursion = useCallback(() => {
+    if (statusRef.current === "EXCURSION") return;
+    forcingExcursionRef.current = true;
+    setIsForcingExcursion(true);
+  }, []);
+
   const updateFieldLog = useCallback(
     (patch: Partial<FieldLogMeta>) => {
       const next = { ...fieldLogMeta, ...patch };
@@ -440,6 +488,9 @@ export function ColdChainProvider({ children }: { children: ReactNode }) {
     sampleCountRef.current = 0;
     setReadings(seeded);
     setSecondsUntilLedgerAppend(Math.round(LEDGER_INTERVAL_MS / 1000));
+    // A forcing request belongs to the shipment it was made against.
+    forcingExcursionRef.current = false;
+    setIsForcingExcursion(false);
 
     // An Investigation cannot span a SHIPMENT_CREATE (deriveInvestigationState
     // in ledger.ts, and the render-time adjustment above, both encode this),
@@ -525,6 +576,8 @@ export function ColdChainProvider({ children }: { children: ReactNode }) {
       status,
       isMonitoring,
       setIsMonitoring,
+      isForcingExcursion,
+      forceExcursion,
       readings,
       chartPath,
       lastSyncAt,
@@ -547,6 +600,8 @@ export function ColdChainProvider({ children }: { children: ReactNode }) {
       temperature,
       status,
       isMonitoring,
+      isForcingExcursion,
+      forceExcursion,
       readings,
       chartPath,
       lastSyncAt,

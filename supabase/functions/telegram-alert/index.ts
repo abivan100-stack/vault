@@ -29,6 +29,8 @@ type AlertRequest = {
   sequence: number;
   hash: string;
   at: string;
+  /** Chats a previous attempt already delivered to. */
+  skipChatIds?: string[];
 };
 
 const CORS_HEADERS = {
@@ -144,11 +146,31 @@ Deno.serve(async (request) => {
     .eq("org_id", alert.orgId);
 
   if (error) return json({ error: error.message }, 400);
-  if (!links || links.length === 0) return json({ sent: 0, reason: "no linked chats" });
+  if (!links || links.length === 0) return json({ sent: 0, attempted: 0, reason: "no linked chats" });
+
+  // A retry names the chats that already received this alert. Sending to them
+  // again is how one Telegram outage becomes two messages for every chat that
+  // was working.
+  const skip = new Set(
+    Array.isArray(alert.skipChatIds)
+      ? alert.skipChatIds.filter((id): id is string => typeof id === "string")
+      : [],
+  );
+  const targets = links.filter((link) => !skip.has(String(link.chat_id)));
+  const skipped = links.length - targets.length;
+  if (targets.length === 0) {
+    return json({
+      sent: 0,
+      attempted: 0,
+      skipped,
+      linked: links.length,
+      reason: "every linked chat already received this alert",
+    });
+  }
 
   const text = buildMessage(alert);
   const results = await Promise.all(
-    links.map(async (link) => {
+    targets.map(async (link) => {
       // One chat's network failure must not reject the batch. The other
       // chats have already been written to, and a rejection here would
       // report nothing and invite a retry that delivers them twice.
@@ -179,5 +201,8 @@ Deno.serve(async (request) => {
   // A partial failure is reported rather than swallowed, and a total one is
   // not dressed up as success: there were chats to deliver to and none of
   // them received it, so a caller reading response.ok must see a failure.
-  return json({ sent, attempted: results.length, results }, sent === 0 ? 502 : 200);
+  return json(
+    { sent, attempted: results.length, skipped, linked: links.length, results },
+    sent === 0 ? 502 : 200,
+  );
 });

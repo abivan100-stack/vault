@@ -4,7 +4,9 @@ import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-do
 import {
   Activity,
   Bell,
+  Building2,
   ChevronDown,
+  CloudOff,
   CircleHelp,
   Database,
   Moon,
@@ -16,7 +18,10 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { ColdChainProvider, useColdChain } from "@/context/ColdChainContext";
-import { Button } from "@/components/ui/button";
+import { AuthProvider, useAuth } from "@/context/AuthContext";
+import { LedgerSyncProvider } from "@/hooks/useLedgerSync";
+import { roleLabel } from "@/lib/roles";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -30,18 +35,7 @@ import LoadingScreen from "@/components/LoadingScreen";
 import { useAnime } from "@/hooks/useAnime";
 import { formatClock } from "@/lib/simulation";
 import { formatEventLabel, type LedgerEntry } from "@/lib/ledger";
-import { SAFE_MAX_C, SAFE_MIN_C } from "@/lib/chart";
 import { fadeInUp, fadeOut, prefersReducedMotion } from "@/lib/motion";
-
-/**
- * The prototype has no authentication. The operator block is clearly labelled
- * as demo data so it is never mistaken for a signed-in user.
- */
-const DEMO_OPERATOR = {
-  initials: "RK",
-  name: "Raghav K.",
-  role: "Demo operator",
-} as const;
 
 const NAV_ITEMS = [
   { to: "/monitor", label: "Monitor", icon: Activity },
@@ -134,79 +128,6 @@ function NotificationsDialog({
   );
 }
 
-function HelpDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[86vh] max-w-[540px] gap-0 overflow-hidden p-0">
-        <DialogHeader className="border-b border-line p-5">
-          <DialogTitle className="text-[15px] font-semibold tracking-[-0.01em]">
-            How Vault works
-          </DialogTitle>
-          <DialogDescription className="text-[13px] text-ink-muted">
-            A local simulation — no sensor is attached and nothing leaves this browser.
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="max-h-[58vh] space-y-5 overflow-auto p-5">
-          <section>
-            <h3 className="text-[13px] font-semibold text-ink">The simulation</h3>
-            <p className="mt-1.5 text-[13.5px] leading-relaxed text-ink-muted">
-              A temperature is generated every 2 seconds inside the {SAFE_MIN_C}–{SAFE_MAX_C} °C
-              corridor, with 0.5 °C of headroom either side so excursions can be exercised.
-              Status flips to <span className="font-medium text-ink">EXCURSION</span> the moment a
-              reading leaves the corridor.
-            </p>
-          </section>
-
-          <section>
-            <h3 className="text-[13px] font-semibold text-ink">The ledger</h3>
-            <p className="mt-1.5 text-[13.5px] leading-relaxed text-ink-muted">
-              Every 10 seconds the current reading is appended to a hash-chained ledger, as are
-              shipment edits, excursions and handoffs. Each entry commits to its own contents and to
-              the previous entry's digest, so the Ledger page can show whether any retained entry
-              has been edited, removed or reordered. It is tamper evidence, not tamper proofing:
-              the chain lives in this browser's storage with nothing signing it, so anyone able to
-              write that storage could replace it wholesale.
-            </p>
-          </section>
-
-          <section>
-            <h3 className="text-[13px] font-semibold text-ink">What persists</h3>
-            <ul className="mt-1.5 space-y-1.5 text-[13.5px] leading-relaxed text-ink-muted">
-              <li>
-                Shipment record and ledger are saved to{" "}
-                <code className="font-mono text-[12.5px]">localStorage</code> and survive a reload.
-              </li>
-              <li>The chart window is live only — it restarts with the session.</li>
-              <li>Theme preference is remembered.</li>
-            </ul>
-          </section>
-
-          <section>
-            <h3 className="text-[13px] font-semibold text-ink">Shortcuts</h3>
-            <p className="mt-1.5 text-[13.5px] leading-relaxed text-ink-muted">
-              <kbd className="rounded border border-line bg-sunken px-1.5 py-0.5 font-mono text-[12px]">
-                ⌘K
-              </kbd>{" "}
-              or{" "}
-              <kbd className="rounded border border-line bg-sunken px-1.5 py-0.5 font-mono text-[12px]">
-                Ctrl K
-              </kbd>{" "}
-              opens the command palette. Shipment edits live under Shipment → Manage.
-            </p>
-          </section>
-        </div>
-
-        <div className="flex justify-end border-t border-line p-4">
-          <Button onClick={() => onOpenChange(false)} className="h-9 px-5 text-sm">
-            Got it
-          </Button>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
 function CommandPalette({
   open,
   onOpenChange,
@@ -222,7 +143,9 @@ function CommandPalette({
       { label: "Go to Monitor", path: "/monitor", icon: Activity, keywords: "monitor temperature chart live" },
       { label: "Open Ledger", path: "/ledger", icon: Database, keywords: "ledger hash audit trail export" },
       { label: "Shipment overview", path: "/shipment", icon: Package, keywords: "shipment box batch route" },
-      { label: "Manage shipment", path: "/shipment/manage", icon: Truck, keywords: "edit handoff new reset manage" },
+      { label: "Manage shipment", path: "/shipment/manage", icon: Truck, keywords: "edit handoff new reset manage export report pdf" },
+      { label: "How Vault works", path: "/help", icon: CircleHelp, keywords: "help manual docs guide glossary verification limits" },
+      { label: "Organisation", path: "/organisation", icon: Building2, keywords: "account org members roles invite telegram alerts sync sign out" },
     ],
     [],
   );
@@ -299,10 +222,78 @@ function CommandPalette({
   );
 }
 
+/**
+ * Who is signed in, and into what.
+ *
+ * This used to be a hardcoded "Demo operator", clearly labelled as such
+ * because the prototype had no authentication. It has one now, and the block
+ * states the true position in all four of its states — including the two that
+ * are not "signed in", which are the ones a person needs told: running with
+ * no backend at all, and running with one but signed out.
+ */
+function AccountBlock() {
+  const { status, user, activeOrg, role } = useAuth();
+
+  if (status === "UNCONFIGURED") {
+    return (
+      <span
+        className="hidden items-center gap-2 border-l border-line pl-3 xl:flex"
+        title="No backend is configured. The ledger lives in this browser only."
+      >
+        <span className="grid h-8 w-8 place-items-center rounded-full bg-sunken text-ink-subtle">
+          <CloudOff size={15} aria-hidden="true" />
+        </span>
+        <span className="leading-none">
+          <span className="block whitespace-nowrap text-[13px] font-medium text-ink">Local only</span>
+          <span className="mt-1 block whitespace-nowrap text-[11.5px] text-ink-subtle">
+            No backend
+          </span>
+        </span>
+      </span>
+    );
+  }
+
+  if (status !== "SIGNED_IN" || !user) {
+    return (
+      <Link
+        to="/signin"
+        className={buttonVariants({
+          variant: "outline",
+          size: "lg",
+          className: "hidden whitespace-nowrap text-[13px] xl:inline-flex",
+        })}
+      >
+        {status === "LOADING" ? "…" : "Sign in"}
+      </Link>
+    );
+  }
+
+  const label = user.email ?? "Signed in";
+  return (
+    <Link
+      to="/organisation"
+      className="hidden items-center gap-2 border-l border-line pl-3 transition-colors hover:text-ink xl:flex"
+      title={activeOrg ? `${label} — ${activeOrg.name}` : label}
+    >
+      <span className="grid h-8 w-8 place-items-center rounded-full bg-sunken font-mono text-[12px] font-semibold text-ink-muted">
+        {label.slice(0, 2).toUpperCase()}
+      </span>
+      <span className="leading-none">
+        <span className="block max-w-[140px] truncate text-[13px] font-medium text-ink">
+          {activeOrg?.name ?? "No organisation"}
+        </span>
+        <span className="mt-1 block whitespace-nowrap text-[11.5px] text-ink-subtle">
+          {role ? roleLabel(role) : "No role"}
+        </span>
+      </span>
+      <ChevronDown size={14} className="text-ink-subtle" aria-hidden="true" />
+    </Link>
+  );
+}
+
 function Header({ isDark, onToggleTheme }: { isDark: boolean; onToggleTheme: () => void }) {
   const { status, isMonitoring, unreadNotificationCount, notifications, markNotificationsRead } =
     useColdChain();
-  const [helpOpen, setHelpOpen] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
 
@@ -313,7 +304,6 @@ function Header({ isDark, onToggleTheme }: { isDark: boolean; onToggleTheme: () 
       if (typeof event.key !== "string") return;
       if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== "k") return;
       event.preventDefault();
-      setHelpOpen(false);
       setNotificationsOpen(false);
       setCommandOpen((previous) => !previous);
     };
@@ -425,34 +415,28 @@ function Header({ isDark, onToggleTheme }: { isDark: boolean; onToggleTheme: () 
                   has no `decorative` opt-out, so hide it explicitly — otherwise
                   browse-mode users get two content-free stops. */}
               <Separator orientation="vertical" className="h-4" aria-hidden="true" />
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setHelpOpen(true)}
-                className="rounded-md text-ink-muted"
+              {/* The manual is a page, not a dialog: it is the one place the
+                  product explains what its guarantees actually are, and it
+                  was the most cramped surface in the app while it was a
+                  540px modal stacked over whatever you were reading. */}
+              {/* A Link wearing the button's classes rather than `Button
+                  render={<Link/>}`: Base UI's Button asserts a native
+                  <button> underneath and warns when handed an anchor, and
+                  this genuinely is navigation. */}
+              <Link
+                to="/help"
                 aria-label="How Vault works"
+                className={buttonVariants({
+                  variant: "ghost",
+                  size: "icon",
+                  className: "rounded-md text-ink-muted",
+                })}
               >
                 <CircleHelp size={16} aria-hidden="true" />
-              </Button>
+              </Link>
             </div>
 
-            <div
-              className="hidden items-center gap-2 border-l border-line pl-2 xl:flex"
-              title="Demo account — this prototype has no authentication"
-            >
-              <span className="grid h-8 w-8 place-items-center rounded-full bg-sunken font-mono text-[12px] font-semibold text-ink-muted">
-                {DEMO_OPERATOR.initials}
-              </span>
-              <span className="leading-none">
-                <span className="block whitespace-nowrap text-[13px] font-medium text-ink">
-                  {DEMO_OPERATOR.name}
-                </span>
-                <span className="mt-1 block whitespace-nowrap text-[11.5px] text-ink-subtle">
-                  {DEMO_OPERATOR.role}
-                </span>
-              </span>
-              <ChevronDown size={14} className="text-ink-subtle" aria-hidden="true" />
-            </div>
+            <AccountBlock />
           </div>
         </div>
       </div>
@@ -470,7 +454,6 @@ function Header({ isDark, onToggleTheme }: { isDark: boolean; onToggleTheme: () 
       </div>
 
       <CommandPalette open={commandOpen} onOpenChange={setCommandOpen} />
-      <HelpDialog open={helpOpen} onOpenChange={setHelpOpen} />
       <NotificationsDialog
         open={notificationsOpen}
         onOpenChange={setNotificationsOpen}
@@ -574,9 +557,13 @@ export default function App() {
   return (
     <>
       {loader !== "gone" && <LoadingScreen ref={loadingScreenRef} onFinished={finishLoading} />}
-      <ColdChainProvider>
-        <Layout isDark={isDark} onToggleTheme={toggleTheme} />
-      </ColdChainProvider>
+      <AuthProvider>
+        <ColdChainProvider>
+          <LedgerSyncProvider>
+            <Layout isDark={isDark} onToggleTheme={toggleTheme} />
+          </LedgerSyncProvider>
+        </ColdChainProvider>
+      </AuthProvider>
     </>
   );
 }

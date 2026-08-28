@@ -24,6 +24,35 @@ _Avoid_: Ticket, case, incident.
 The shipment-wide status of whether the Ledger can currently be trusted from a workflow standpoint: Under Investigation while any Investigation is open, Cleared otherwise. This is a single global flag for the whole Ledger, not a per-entry annotation - one open Investigation is enough to withhold clearance for the entire shipment. Distinct from, and independent of, whether the chain is Intact.
 _Avoid_: Verified (see Intact / Verified above).
 
+**Organisation**:
+The unit everything belongs to once a backend is configured: its members, its
+shipments, its ledger, its alert destinations. A person can be in several, and
+holds one Role in each. Absent entirely in a local-only build, where there is
+nothing for anything to belong to.
+_Avoid_: Team, workspace, tenant.
+
+**Role**:
+What a member may do in an Organisation, in ascending authority: Viewer,
+Operator, Admin, Owner. Decided by the row-level security policies in
+`supabase/schema.sql`; `src/lib/roles.ts` is the console's copy of that
+decision, used only to stop offering an action the server would refuse.
+_Avoid_: Permission, access level (a Role *has* those).
+
+**Anchor**:
+A copy of a Ledger entry somewhere its writer cannot afterwards edit or remove
+it. Syncing to an Organisation produces one, because `ledger_entries` grants
+INSERT and SELECT and no UPDATE or DELETE. An anchored entry is not a *signed*
+entry, and the distinction is load-bearing: the server takes the browser's word
+for what an entry says, and only guarantees that what it said cannot change.
+_Avoid_: Backup, notarised, immutable.
+
+**Report**:
+The PDF a shipment leaves behind, scoped to that shipment rather than the whole
+chain. Generated in the browser, and self-describing: it carries its own verdict
+and its own caveat, because it will be read long after and far away from the app
+that produced it.
+_Avoid_: Export (the CSV is an export; the Report is a document).
+
 **Resolution Reason**:
 The structured category chosen when resolving an Investigation (e.g. Sensor Fault, Carrier Delay, Confirmed Loss, Other), paired with a required freeform note. Makes investigations queryable, not just readable.
 _Avoid_: Ticket status, disposition.
@@ -87,3 +116,9 @@ _Avoid_: Shadow, z-level.
   what made the light theme read as washed out.
 - Dark mode is not changed as a side effect of a light-mode change. Anything
   that would alter it is scoped, or the token resolves to nothing there.
+- The console works with no backend configured. Identity is a layer beside the
+  simulation, the Ledger and the shipment record — never a prerequisite
+  underneath them.
+- Nothing claims an Anchor it does not have. "Verified", "cannot be edited" and
+  "synced" are three different statements, and each is made only in the state
+  that earns it.

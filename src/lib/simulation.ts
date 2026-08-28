@@ -32,6 +32,30 @@ export function randomDrift(random: () => number = Math.random): number {
   return (random() - 0.5) * DRIFT_RANGE_C;
 }
 
+/**
+ * Drift applied per sample while an excursion is being forced.
+ *
+ * Large enough that the corridor is crossed within a few samples — an
+ * operator who asks for an excursion should not have to wait out the random
+ * walk — but not so large that the reading teleports past the plotted domain
+ * in a single tick, which would look like a broken sensor rather than a
+ * temperature climbing.
+ */
+export const FORCED_DRIFT_C = 0.7;
+
+/**
+ * The drift that moves a reading towards the nearer edge of the corridor.
+ *
+ * Direction is chosen from where the reading already is rather than fixed, so
+ * forcing an excursion from 2.4 °C runs the box cold and from 7.6 °C runs it
+ * warm — the excursion that was actually about to happen, not an arbitrary
+ * one. `low` and `high` are injected so this stays pure and testable.
+ */
+export function forcedDrift(current: number, low: number, high: number): number {
+  const midpoint = (low + high) / 2;
+  return current >= midpoint ? FORCED_DRIFT_C : -FORCED_DRIFT_C;
+}
+
 /** Appends a reading and trims the window to READING_WINDOW. */
 export function pushReading(readings: readonly Reading[], reading: Reading): Reading[] {
   return [...readings, reading].slice(-READING_WINDOW);
@@ -59,6 +83,21 @@ export function formatIsoDate(iso: string): string {
   const month = String(date.getMonth() + 1).padStart(2, "0");
   const day = String(date.getDate()).padStart(2, "0");
   return `${date.getFullYear()}-${month}-${day}`;
+}
+
+/**
+ * `27 Aug 2026` — the day heading in the ledger's chain view.
+ *
+ * Prose rather than a machine value, so it is locale-formatted and set in the
+ * text face. `formatIsoDate` stays the format for anything a machine reads
+ * back: CSV columns, filenames, the PDF.
+ */
+export function formatDayLabel(iso: string): string {
+  return new Date(iso).toLocaleDateString(undefined, {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
 }
 
 /** Describes the real span covered by the chart, e.g. `LAST 58 SEC`. */

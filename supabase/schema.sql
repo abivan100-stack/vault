@@ -148,17 +148,39 @@ create table if not exists public.ledger_entries (
   hash text not null check (hash ~ '^[0-9a-f]{64}$'),
   created_by uuid not null references auth.users (id) on delete restrict,
   created_at timestamptz not null default now(),
+  -- Which browser's chain this entry belongs to.
+  --
+  -- An organisation is not one chain. Each browser keeps its own local ledger
+  -- and each starts at sequence 1, so scoping the sequence to the
+  -- organisation alone left the second operator's entries colliding with the
+  -- first's for ever. Scoping it to the chain lets an organisation hold
+  -- several, each verifiable end to end on its own, which is what they
+  -- actually are.
+  chain_id text not null,
   -- The digest commits to the entry's contents AND its predecessor, so within
   -- one organisation it is already unique. Making the database say so turns a
   -- re-sync into an idempotent no-op instead of a duplicate.
-  unique (org_id, hash),
-  -- One organisation, one chain. Two browsers each holding a local ledger
-  -- would otherwise both sync an entry at sequence 4, and the server copy
-  -- would fork: two entries claiming the same position, which no ordered
-  -- chain can represent. The database refuses the second, and the client
-  -- surfaces the refusal as a failed sync rather than a silent divergence.
-  unique (org_id, sequence)
+  unique (org_id, hash)
 );
+
+-- `create table if not exists` does nothing to a table that already exists,
+-- so an installation created before chain_id would never gain it. These run
+-- either way.
+alter table public.ledger_entries
+  add column if not exists chain_id text not null default '';
+
+-- The organisation-wide sequence constraint an earlier version of this file
+-- created. It has to go, or a second browser's chain still collides on
+-- sequence numbers that are only meaningful within a chain.
+alter table public.ledger_entries
+  drop constraint if exists ledger_entries_org_id_sequence_key;
+
+-- One chain, one sequence. Within a chain a repeated position is a fork,
+-- which no ordered ledger can represent; the database refuses it and the
+-- client reports the refusal rather than diverging quietly. An index rather
+-- than a table constraint, for the same reason as the column above.
+create unique index if not exists ledger_entries_chain_sequence_idx
+  on public.ledger_entries (org_id, chain_id, sequence);
 
 /*
  * An entry and the shipment it cites belong to the same organisation.
@@ -193,7 +215,7 @@ create trigger ledger_entries_shipment_org
   for each row execute function public.assert_ledger_shipment_org();
 
 create index if not exists ledger_entries_org_idx
-  on public.ledger_entries (org_id, sequence desc);
+  on public.ledger_entries (org_id, chain_id, sequence desc);
 -- Paste-a-digest lookup: the app searches by prefix, which needs a text
 -- pattern index rather than the plain b-tree the unique constraint gives.
 create index if not exists ledger_entries_hash_prefix_idx
