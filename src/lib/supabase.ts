@@ -27,8 +27,39 @@ const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
  * error. Refusing to build one at all turns that into the honest state the UI
  * already knows how to show: not connected.
  */
+/**
+ * A Supabase key is a JWT whose payload names the role it carries. The anon
+ * key is public by design; the service-role key bypasses every policy. They
+ * are the same shape and easy to paste into the wrong variable.
+ *
+ * This check does not protect the key. A `VITE_` value is substituted into
+ * the bundle at build time, so if one reaches here it has already been
+ * published and must be rotated. `vite.config.ts` refuses the build for that
+ * reason. What this adds is a dev-server path -- where no build ran -- that
+ * disables the backend and says why, rather than quietly talking to Supabase
+ * with a key that ignores every policy.
+ */
+function isServiceRoleKey(key: string): boolean {
+  const payload = key.split(".")[1];
+  if (!payload) return false;
+  try {
+    const decoded = atob(payload.replace(/-/g, "+").replace(/_/g, "/"));
+    return JSON.parse(decoded)?.role === "service_role";
+  } catch {
+    return false;
+  }
+}
+
 export function isBackendConfigured(): boolean {
   if (typeof url !== "string" || typeof anonKey !== "string" || anonKey.length <= 20) {
+    return false;
+  }
+  if (isServiceRoleKey(anonKey)) {
+    // Refuse rather than ship it. Returning false leaves the console in its
+    // local-only mode, which is the honest state and one the UI can show.
+    console.error(
+      "VITE_SUPABASE_ANON_KEY holds a service-role key. It bypasses row-level security and must never reach the browser. The backend is disabled.",
+    );
     return false;
   }
   // A prefix test also accepts the bare string "http", which `createClient`
