@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { ChevronRight, ShieldAlert } from "lucide-react";
+import { BellOff, ChevronRight, ShieldAlert } from "lucide-react";
 import { useColdChain } from "@/context/ColdChainContext";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import Stat from "@/components/Stat";
 import StatusPill from "@/components/StatusPill";
 import { playAnime } from "@/hooks/useAnime";
+import { Button } from "@/components/ui/button";
+import { acknowledgeAlarm, deviceUrl } from "@/lib/device";
 import { DURATION, EASING } from "@/lib/motion";
 import {
   CHART_HEIGHT,
@@ -48,6 +50,56 @@ export default function MonitorPage() {
   // means the first effect run (mount) always sees "no change" and skips —
   // so this never fires on mount, and never on the 2s tick unless `status`
   // itself changed.
+  // The board's address, read once: it is build configuration, not state.
+  const device = deviceUrl();
+  const [acknowledging, setAcknowledging] = useState(false);
+  const [acknowledged, setAcknowledged] = useState(false);
+  const [ackNote, setAckNote] = useState<string | null>(null);
+  // Counts breaches, so a reply can be matched to the one it was sent for.
+  // State, because it changes during render when the corridor state does; the
+  // ref mirrors it so a settled request can read the current value.
+  const [breachId, setBreachId] = useState(0);
+  const breachRef = useRef(0);
+  useEffect(() => {
+    breachRef.current = breachId;
+  }, [breachId]);
+
+  // Cleared whenever the corridor state changes, so a note about the last
+  // breach is not still on screen describing a buzzer that has since
+  // re-armed. Adjusted during render rather than in an effect: an effect
+  // would set state synchronously and cascade an extra render on every tick.
+  const [noteStatus, setNoteStatus] = useState(status);
+  if (noteStatus !== status) {
+    setNoteStatus(status);
+    setAckNote(null);
+    setAcknowledged(false);
+    setAcknowledging(false);
+    setBreachId((previous) => previous + 1);
+  }
+
+  const handleAcknowledge = async () => {
+    // The breach this request belongs to. A reply that arrives after the
+    // corridor was regained and broken again describes the previous alarm,
+    // and showing it against the new one would say the buzzer is paused when
+    // it is sounding.
+    const forBreach = breachId;
+    setAcknowledging(true);
+    setAckNote(null);
+    const result = await acknowledgeAlarm(device);
+    // Only for the breach this reply belongs to. Clearing it unconditionally
+    // would re-enable the button for a newer breach whose own request is
+    // still out, letting two overlap. The new breach does not need clearing
+    // from here: the reset above already did it when the corridor changed.
+    if (breachRef.current !== forBreach) return;
+    setAcknowledging(false);
+    setAcknowledged(result.ok);
+    setAckNote(
+      result.ok
+        ? "Buzzer paused on the device. It sounds again on the next breach."
+        : result.message,
+    );
+  };
+
   const prevStatusRef = useRef(status);
   const statusPillRef = useRef<HTMLSpanElement>(null);
   const temperatureRef = useRef<HTMLSpanElement>(null);
@@ -87,6 +139,29 @@ export default function MonitorPage() {
           Last sync {lastSyncAt ? formatClock(lastSyncAt) : "—"}
         </p>
       </header>
+
+      {device !== null && status === "EXCURSION" && (
+        <div className="flex flex-wrap items-center gap-3 rounded-lg border border-warning-line bg-warning-soft p-3.5 shadow-e1 dark:border-warning/40">
+          <BellOff size={17} className="shrink-0 text-warning" aria-hidden="true" />
+          <div className="min-w-0 flex-1">
+            <p className="text-[13.5px] font-medium text-ink">
+              {acknowledged ? "Buzzer acknowledged" : "The device is sounding"}
+            </p>
+            <p className="mt-0.5 text-[13px] text-ink-muted">
+              {ackNote ??
+                "Acknowledging pauses the buzzer on the probe. It does not clear the excursion, close the investigation, or change anything on the ledger."}
+            </p>
+          </div>
+          <Button
+            onClick={handleAcknowledge}
+            disabled={acknowledging}
+            className="h-9 shrink-0 gap-2 text-sm"
+          >
+            <BellOff size={15} aria-hidden="true" />
+            {acknowledging ? "Acknowledging…" : "Acknowledge"}
+          </Button>
+        </div>
+      )}
 
       {investigation.status === "UNDER_INVESTIGATION" && investigation.openEntry && (
         <Link
