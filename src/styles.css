@@ -283,6 +283,34 @@
    site; only things utilities cannot express well live here.
    --------------------------------------------------------------------------- */
 
+/* Scroll region inside a panel. The platform scrollbar is too heavy at this
+   width and parks its track on the panel's rounded edge; pseudo-elements are
+   the only way to slim it, so it cannot be a utility. */
+.scroll-slim {
+  scrollbar-width: thin;
+  scrollbar-color: var(--line-strong) transparent;
+}
+
+.scroll-slim::-webkit-scrollbar {
+  width: 10px;
+}
+
+.scroll-slim::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Chromium still draws stepper arrows at each end without this. */
+.scroll-slim::-webkit-scrollbar-button {
+  display: none;
+}
+
+.scroll-slim::-webkit-scrollbar-thumb {
+  background-color: var(--line-strong);
+  background-clip: content-box;
+  border: 3px solid transparent;
+  border-radius: 999px;
+}
+
 /* Section label above a heading — small, uppercase, muted. No "01 /" numbering.
    Layered so a call site can override the colour with a utility; unlayered CSS
    always wins over Tailwind's utilities regardless of source order. */

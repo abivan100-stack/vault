@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import anime from "animejs";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import {
@@ -7,6 +7,8 @@ import {
   ChevronDown,
   CircleHelp,
   Database,
+  HardDrive,
+  Keyboard,
   Moon,
   Package,
   Search,
@@ -14,6 +16,7 @@ import {
   Truck,
   TriangleAlert,
   ShieldCheck,
+  type LucideIcon,
 } from "lucide-react";
 import { ColdChainProvider, useColdChain } from "@/context/ColdChainContext";
 import { Button } from "@/components/ui/button";
@@ -33,9 +36,9 @@ import {
   SEGMENT_MOVES,
   useSegmentedIndicator,
 } from "@/hooks/useSegmentedIndicator";
-import { formatClock } from "@/lib/simulation";
+import { LEDGER_INTERVAL_MS, SAMPLE_INTERVAL_MS, formatClock } from "@/lib/simulation";
 import { formatEventLabel, type LedgerEntry } from "@/lib/ledger";
-import { SAFE_MAX_C, SAFE_MIN_C } from "@/lib/chart";
+import { CHART_MIN_C, SAFE_MAX_C, SAFE_MIN_C } from "@/lib/chart";
 import { fadeInUp, fadeOut, prefersReducedMotion } from "@/lib/motion";
 
 /**
@@ -138,70 +141,160 @@ function NotificationsDialog({
   );
 }
 
+/**
+ * Headroom either side of the safe corridor. Derived rather than typed into the
+ * copy, so the help text cannot drift away from the chart it describes.
+ */
+const CORRIDOR_HEADROOM_C = SAFE_MIN_C - CHART_MIN_C;
+
+/** A keycap, sized to sit with 13px body text. */
+function Kbd({ children }: { children: ReactNode }) {
+  return (
+    <kbd className="rounded border border-line bg-sunken px-1.5 py-0.5 font-mono text-[11.5px] font-medium text-ink-muted">
+      {children}
+    </kbd>
+  );
+}
+
+/** One help topic as a card — the same shell the landing page uses. */
+function HelpSection({
+  icon: Icon,
+  title,
+  children,
+}: {
+  icon: LucideIcon;
+  title: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="rounded-xl border border-line bg-raised p-4">
+      <div className="flex items-center gap-2.5">
+        <Icon size={15} className="shrink-0 text-ink-subtle" aria-hidden="true" />
+        <h3 className="text-[13.5px] font-semibold tracking-[-0.01em] text-ink">{title}</h3>
+      </div>
+      {children}
+    </section>
+  );
+}
+
 function HelpDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[86vh] max-w-[540px] gap-0 overflow-hidden p-0">
-        <DialogHeader className="border-b border-line p-5">
-          <DialogTitle className="text-[15px] font-semibold tracking-[-0.01em]">
-            How Vault works
-          </DialogTitle>
-          <DialogDescription className="text-[13px] text-ink-muted">
-            A local simulation — no sensor is attached and nothing leaves this browser.
-          </DialogDescription>
+      {/* `sm:max-w-*` has to be respecified: the DialogContent primitive ships
+          `sm:max-w-sm`, which quietly beat the unprefixed width this used to
+          set and squeezed every paragraph into a six-word column. */}
+      <DialogContent className="flex max-h-[90vh] flex-col gap-0 overflow-hidden p-0 sm:max-w-[620px]">
+        <DialogHeader className="flex-row items-start gap-3 border-b border-line px-5 py-4 pr-12">
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-brand-soft text-brand-ink">
+            <CircleHelp size={17} aria-hidden="true" />
+          </span>
+          <div className="min-w-0">
+            <DialogTitle className="text-[15px] font-semibold tracking-[-0.01em] text-ink">
+              How Vault works
+            </DialogTitle>
+            <DialogDescription className="mt-1 text-[13px] leading-relaxed text-ink-muted">
+              A local simulation — no sensor is attached and nothing leaves this browser.
+            </DialogDescription>
+          </div>
         </DialogHeader>
 
-        <div className="max-h-[58vh] space-y-5 overflow-auto p-5">
-          <section>
-            <h3 className="text-[13px] font-semibold text-ink">The simulation</h3>
-            <p className="mt-1.5 text-[13.5px] leading-relaxed text-ink-muted">
-              A temperature is generated every 2 seconds inside the {SAFE_MIN_C}–{SAFE_MAX_C} °C
-              corridor, with 0.5 °C of headroom either side so excursions can be exercised.
-              Status flips to <span className="font-medium text-ink">EXCURSION</span> the moment a
-              reading leaves the corridor.
+        {/* `min-h-0` lets the scroll region take whatever the flex column has
+            left, instead of the fixed 58vh that stranded it mid-panel. */}
+        <div className="scroll-slim min-h-0 flex-1 space-y-3.5 overflow-y-auto bg-surface p-4">
+          <HelpSection icon={Activity} title="The simulation">
+            <p className="mt-2 text-[13.5px] leading-relaxed text-ink-muted">
+              A temperature is generated every {SAMPLE_INTERVAL_MS / 1000} seconds inside the safe
+              corridor, with headroom either side so excursions can be exercised. Status flips to{" "}
+              <span className="font-medium text-ink">EXCURSION</span> the moment a reading leaves the
+              corridor.
             </p>
-          </section>
+            <dl className="mt-3.5 grid grid-cols-3 gap-px overflow-hidden rounded-lg border border-line bg-line">
+              {[
+                { label: "Sample", value: `${SAMPLE_INTERVAL_MS / 1000} s` },
+                { label: "Corridor", value: `${SAFE_MIN_C}–${SAFE_MAX_C} °C` },
+                { label: "Headroom", value: `±${CORRIDOR_HEADROOM_C} °C` },
+              ].map((fact) => (
+                <div key={fact.label} className="bg-sunken px-3 py-2.5">
+                  <dt className="text-[10.5px] font-semibold uppercase tracking-[0.08em] text-ink-subtle">
+                    {fact.label}
+                  </dt>
+                  <dd className="tabular mt-1 font-mono text-[13px] font-medium text-ink">
+                    {fact.value}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+          </HelpSection>
 
-          <section>
-            <h3 className="text-[13px] font-semibold text-ink">The ledger</h3>
-            <p className="mt-1.5 text-[13.5px] leading-relaxed text-ink-muted">
-              Every 10 seconds the current reading is appended to a hash-chained ledger, as are
-              shipment edits, excursions and handoffs. Each entry commits to its own contents and to
-              the previous entry's digest, so the Ledger page can show whether any retained entry
-              has been edited, removed or reordered. It is tamper evidence, not tamper proofing:
-              the chain lives in this browser's storage with nothing signing it, so anyone able to
-              write that storage could replace it wholesale.
+          <HelpSection icon={Database} title="The ledger">
+            <p className="mt-2 text-[13.5px] leading-relaxed text-ink-muted">
+              Every {LEDGER_INTERVAL_MS / 1000} seconds the current reading is appended to a
+              hash-chained ledger, as are shipment edits, excursions and handoffs. Each entry commits
+              to its own contents and to the previous entry's digest, so the Ledger page can show
+              whether any retained entry has been edited, removed or reordered.
             </p>
-          </section>
+            <div className="mt-3 flex items-start gap-2.5 rounded-lg border border-warning/20 bg-warning-soft p-3">
+              <TriangleAlert size={14} className="mt-0.5 shrink-0 text-warning" aria-hidden="true" />
+              <p className="text-[12.5px] leading-relaxed text-ink-muted">
+                <span className="font-medium text-ink">Tamper evidence, not tamper proofing.</span>{" "}
+                The chain lives in this browser's storage with nothing signing it, so anyone able to
+                write that storage could replace it wholesale.
+              </p>
+            </div>
+          </HelpSection>
 
-          <section>
-            <h3 className="text-[13px] font-semibold text-ink">What persists</h3>
-            <ul className="mt-1.5 space-y-1.5 text-[13.5px] leading-relaxed text-ink-muted">
-              <li>
-                Shipment record and ledger are saved to{" "}
-                <code className="font-mono text-[12.5px]">localStorage</code> and survive a reload.
-              </li>
-              <li>The chart window is live only — it restarts with the session.</li>
-              <li>Theme preference is remembered.</li>
-            </ul>
-          </section>
+          <div className="grid gap-3.5 sm:grid-cols-2">
+            <HelpSection icon={HardDrive} title="What persists">
+              <ul className="mt-2.5 space-y-2 text-[13px] leading-relaxed text-ink-muted">
+                <li className="flex items-start gap-2">
+                  <span
+                    className="mt-[6px] h-1.5 w-1.5 shrink-0 rounded-full bg-success"
+                    aria-hidden="true"
+                  />
+                  <span>
+                    Shipment record and ledger, saved to{" "}
+                    <code className="font-mono text-[12.5px] text-ink">localStorage</code>.
+                  </span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span
+                    className="mt-[6px] h-1.5 w-1.5 shrink-0 rounded-full bg-success"
+                    aria-hidden="true"
+                  />
+                  <span>Theme preference.</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span
+                    className="mt-[6px] h-1.5 w-1.5 shrink-0 rounded-full bg-ink-subtle"
+                    aria-hidden="true"
+                  />
+                  <span>The live chart window does not — it restarts with the session.</span>
+                </li>
+              </ul>
+            </HelpSection>
 
-          <section>
-            <h3 className="text-[13px] font-semibold text-ink">Shortcuts</h3>
-            <p className="mt-1.5 text-[13.5px] leading-relaxed text-ink-muted">
-              <kbd className="rounded border border-line bg-sunken px-1.5 py-0.5 font-mono text-[12px]">
-                ⌘K
-              </kbd>{" "}
-              or{" "}
-              <kbd className="rounded border border-line bg-sunken px-1.5 py-0.5 font-mono text-[12px]">
-                Ctrl K
-              </kbd>{" "}
-              opens the command palette. Shipment edits live under Shipment → Manage.
-            </p>
-          </section>
+            <HelpSection icon={Keyboard} title="Shortcuts">
+              <dl className="mt-2.5 space-y-3">
+                <div>
+                  <dt className="text-[13px] text-ink-muted">Command palette</dt>
+                  <dd className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                    <Kbd>⌘K</Kbd>
+                    <span className="text-[11.5px] text-ink-subtle">or</span>
+                    <Kbd>Ctrl K</Kbd>
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-[13px] text-ink-muted">Edit the shipment</dt>
+                  <dd className="mt-1.5 font-mono text-[12px] text-ink-subtle">
+                    Shipment → Manage
+                  </dd>
+                </div>
+              </dl>
+            </HelpSection>
+          </div>
         </div>
 
-        <div className="flex justify-end border-t border-line p-4">
+        <div className="flex justify-end border-t border-line px-5 py-3.5">
           <Button onClick={() => onOpenChange(false)} className="h-9 px-5 text-sm">
             Got it
           </Button>
