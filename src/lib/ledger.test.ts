@@ -8,7 +8,9 @@ import {
   entryDigest,
   formatEventLabel,
   hasInvestigationEvidence,
+  investigationPointerMatches,
   isLedgerEntry,
+  isPersistedInvestigationPointer,
   parseChain,
   resolutionReasonLabel,
   verifyChain,
@@ -359,6 +361,31 @@ describe("isLedgerEntry", () => {
     expect(isLedgerEntry({ ...genuine, hash: "abc" })).toBe(false);
     expect(isLedgerEntry({ ...genuine, event: "NOT_A_REAL_EVENT" })).toBe(false);
     expect(isLedgerEntry({ ...genuine, sequence: 1.5 })).toBe(false);
+  });
+});
+
+describe("persisted investigation pointers", () => {
+  it("requires a bound open entry, shipment key, and ledger head", () => {
+    let chain = buildChain(1);
+    const openEntry = appendEntry(chain, "INVESTIGATION_OPEN", "Opened", at(1))[1];
+    chain = appendEntry(chain, "TEMPERATURE_READING", "4.8 °C", at(2));
+    const pointer = { openEntry, shipmentKey: "SHIP-01", ledgerHeadHash: chain[1].hash };
+
+    expect(isPersistedInvestigationPointer(pointer)).toBe(true);
+    expect(isPersistedInvestigationPointer(openEntry)).toBe(false);
+    expect(isPersistedInvestigationPointer({ ...pointer, shipmentKey: "" })).toBe(false);
+  });
+
+  it("rejects pointers from another shipment or ledger head", () => {
+    let chain = buildChain(1);
+    const openEntry = appendEntry(chain, "INVESTIGATION_OPEN", "Opened", at(1))[1];
+    chain = appendEntry(chain, "TEMPERATURE_READING", "4.8 °C", at(2));
+    const pointer = { openEntry, shipmentKey: "SHIP-01", ledgerHeadHash: chain[1].hash };
+
+    expect(investigationPointerMatches(pointer, chain, "SHIP-01")).toBe(true);
+    expect(investigationPointerMatches(pointer, chain, "SHIP-02")).toBe(false);
+    const changed = appendEntry(chain, "TEMPERATURE_READING", "4.9 °C", at(3));
+    expect(investigationPointerMatches(pointer, changed, "SHIP-01")).toBe(false);
   });
 });
 

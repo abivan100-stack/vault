@@ -173,6 +173,40 @@ export type InvestigationState = {
 };
 
 /**
+ * Durable pointer used when an open investigation has aged out of the
+ * retained ledger window. The binding fields prevent a pointer from one
+ * shipment or ledger instance being presented as current after replacement.
+ */
+export type PersistedInvestigationPointer = {
+  openEntry: LedgerEntry;
+  shipmentKey: string;
+  ledgerHeadHash: string;
+};
+
+export function isPersistedInvestigationPointer(value: unknown): value is PersistedInvestigationPointer {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const candidate = value as Record<string, unknown>;
+  return (
+    isLedgerEntry(candidate.openEntry) &&
+    candidate.openEntry.event === "INVESTIGATION_OPEN" &&
+    typeof candidate.shipmentKey === "string" &&
+    candidate.shipmentKey.length > 0 &&
+    typeof candidate.ledgerHeadHash === "string" &&
+    HEX_64.test(candidate.ledgerHeadHash)
+  );
+}
+
+/** Whether a persisted pointer belongs to this shipment and ledger window. */
+export function investigationPointerMatches(
+  pointer: PersistedInvestigationPointer,
+  chain: readonly LedgerEntry[],
+  shipmentKey: string,
+): boolean {
+  const currentHeadHash = chain.length > 0 ? chain[chain.length - 1].hash : GENESIS_HASH;
+  return pointer.shipmentKey === shipmentKey && pointer.ledgerHeadHash === currentHeadHash;
+}
+
+/**
  * Whether the shipment is currently Cleared or Under Investigation, derived
  * from the ledger itself rather than tracked as separate state — the newest
  * `INVESTIGATION_OPEN`/`INVESTIGATION_RESOLVED` pair is authoritative.

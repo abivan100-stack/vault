@@ -14,7 +14,8 @@ import {
   coveredExcursionSequences,
   deriveInvestigationState,
   hasInvestigationEvidence,
-  isLedgerEntry,
+  investigationPointerMatches,
+  isPersistedInvestigationPointer,
   parseChain,
   resolutionReasonLabel,
   verifyChain,
@@ -23,6 +24,7 @@ import {
   type LedgerEntry,
   type LedgerEventType,
   type ParsedChain,
+  type PersistedInvestigationPointer,
   type ResolutionReason,
 } from "@/lib/ledger";
 import {
@@ -265,10 +267,10 @@ export function ColdChainProvider({ children }: { children: ReactNode }) {
   // overwrite it. Invalid or stale bytes are evidence too: preserve them
   // beside the live key rather than silently replacing the only surviving
   // record with a cleared state.
-  const [storedInvestigation] = useState<LedgerEntry | null>(() => {
+  const [storedInvestigation] = useState<PersistedInvestigationPointer | null>(() => {
     const raw = readStorage(OPEN_INVESTIGATION_KEY);
     if (raw === ABSENT || raw === null) return null;
-    if (raw === CORRUPT || !isLedgerEntry(raw) || raw.event !== "INVESTIGATION_OPEN") {
+    if (raw === CORRUPT || !isPersistedInvestigationPointer(raw)) {
       quarantineStorage(OPEN_INVESTIGATION_KEY);
       return null;
     }
@@ -298,12 +300,16 @@ export function ColdChainProvider({ children }: { children: ReactNode }) {
   // naturally carries forward across everything in between.
   const [investigation, setInvestigation] = useState<InvestigationState>(() => {
     const scanned = deriveInvestigationState(ledger);
+    if (storedInvestigation && !investigationPointerMatches(storedInvestigation, ledger, fieldLogMeta.logId)) {
+      quarantineStorage(OPEN_INVESTIGATION_KEY);
+      return scanned;
+    }
     if (hasInvestigationEvidence(ledger)) return scanned;
     // The retained window has nothing to say about Cleared vs Under
     // Investigation at all — fall back to the separately persisted pointer
     // rather than defaulting to Cleared, which would silently drop a still-
     // open Investigation the moment its evidence aged out.
-    if (storedInvestigation) return { status: "UNDER_INVESTIGATION", openEntry: storedInvestigation };
+    if (storedInvestigation) return { status: "UNDER_INVESTIGATION", openEntry: storedInvestigation.openEntry };
     return scanned;
   });
 
@@ -368,8 +374,15 @@ export function ColdChainProvider({ children }: { children: ReactNode }) {
   }, [notificationsSeen]);
 
   useEffect(() => {
-    writeStorage(OPEN_INVESTIGATION_KEY, investigation.openEntry);
-  }, [investigation]);
+    const pointer = investigation.openEntry
+      ? {
+          openEntry: investigation.openEntry,
+          shipmentKey: fieldLogMeta.logId,
+          ledgerHeadHash: ledger.length > 0 ? ledger[ledger.length - 1].hash : "0".repeat(64),
+        }
+      : null;
+    writeStorage(OPEN_INVESTIGATION_KEY, pointer);
+  }, [fieldLogMeta.logId, investigation, ledger]);
 
   useEffect(() => {
     if (!isMonitoring || liveApiAvailable) return undefined;
