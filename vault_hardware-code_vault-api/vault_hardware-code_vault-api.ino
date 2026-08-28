@@ -61,7 +61,7 @@ unsigned long lastVaultAlarmCheck = 0;
 // Upload the latest sensor reading every 5 seconds so the Vault dashboard
 // receives a fresh device value on each polling cycle.
 const unsigned long VAULT_UPLOAD_INTERVAL = 5000;
-const unsigned long VAULT_ALARM_CHECK_INTERVAL = 1000;
+const unsigned long VAULT_ALARM_CHECK_INTERVAL = 5000;
 
 // =====================================================
 // STATUS
@@ -565,6 +565,7 @@ void sendReadingToVault(float temp, float hum) {
   Serial.println(vaultApiUrl);
   http.setConnectTimeout(5000);
   http.setTimeout(5000);
+  http.useHTTP10(true);
   http.begin(client, vaultApiUrl);
   http.addHeader("Content-Type", "application/json");
 
@@ -608,6 +609,7 @@ void confirmVaultAlarmAcknowledgement() {
   String url = vaultAlarmUrl();
   http.setConnectTimeout(5000);
   http.setTimeout(5000);
+  http.useHTTP10(true);
   http.begin(client, url);
   http.addHeader("Content-Type", "application/json");
   String body = "{\"shipmentId\":\"" + String(vaultShipmentId) + "\"}";
@@ -626,12 +628,14 @@ void checkVaultAlarmAcknowledgement() {
   String url = vaultAlarmUrl();
   http.setConnectTimeout(5000);
   http.setTimeout(5000);
+  http.useHTTP10(true);
   http.begin(client, url);
   int responseCode = http.GET();
   String response = responseCode == 200 ? http.getString() : "";
   http.end();
 
-  if (responseCode == 200 && response.indexOf("\"acknowledge\":true") >= 0 && getStatus() != "SAFE") {
+  if (responseCode == 200 && response.indexOf("\"acknowledge\":true") >= 0 &&
+      getStatus() != "SAFE" && !alarmAcknowledged) {
     alarmAcknowledged = true;
     digitalWrite(BUZZER_PIN, LOW);
     Serial.println("ALARM ACKNOWLEDGED FROM VAULT WEBSITE");

@@ -163,6 +163,33 @@ async function sendTelegramAlert(chatId, message) {
 // gets an immediate alert, then may send another alert once every 30 seconds.
 const TELEGRAM_ALERT_INTERVAL_MS = 30_000;
 const lastTelegramAlertAt = new Map();
+// Learned from each device upload, so DHCP address changes do not require a
+// frontend rebuild or a hard-coded ESP32 address in the browser.
+const deviceHosts = new Map();
+
+function normalizeDeviceHost(remoteAddress) {
+  if (!remoteAddress) return null;
+  const host = remoteAddress.startsWith("::ffff:") ? remoteAddress.slice(7) : remoteAddress;
+  return host === "::1" ? "127.0.0.1" : host;
+}
+
+async function deliverDeviceAcknowledgement(deviceId) {
+  const configured = String(process.env.VAULT_DEVICE_URL || "").trim();
+  const learnedHost = deviceHosts.get(deviceId);
+  if (!configured && !learnedHost) throw new Error("Waiting for the next ESP32 upload to learn its address");
+
+  const origin = configured ? new URL(configured).origin : `http://${learnedHost}`;
+  const response = await fetch(`${origin}/ack`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: "{}",
+    signal: AbortSignal.timeout(5000),
+  });
+  if (!response.ok) throw new Error(`ESP32 returned HTTP ${response.status}`);
+  const body = await response.json().catch(() => ({}));
+  if (body.success === false) throw new Error(body.message || "ESP32 rejected the acknowledgement");
+  return origin;
+}
 
 function canSendTelegramAlert(shipmentId) {
   const now = Date.now();
@@ -206,20 +233,43 @@ const server = createServer(async (request, response) => {
       const deviceId = String(body.deviceId || "vault-device-01");
       const state = alarmState(shipmentId, deviceId);
       if (!state.active) return send(response, 409, { error: "There is no active device alarm to acknowledge" });
+      if (state.acknowledgement_state === "CONFIRMED") {
+        return send(response, 200, { active: true, acknowledgementState: "CONFIRMED", acknowledgedAt: state.acknowledged_at });
+      }
       const now = new Date().toISOString();
       if (state.acknowledgement_state === "UNACKNOWLEDGED") {
         db.prepare("UPDATE device_alarm_state SET acknowledgement_state = 'PENDING', requested_at = ?, updated_at = ? WHERE shipment_id = ? AND device_id = ?").run(now, now, shipmentId, deviceId);
         appendLedger(shipmentId, "ALARM_ACKNOWLEDGEMENT_REQUESTED", `Website acknowledgement requested for ${deviceId}`, now);
       }
-      const next = alarmState(shipmentId, deviceId);
-      return send(response, 202, { active: Boolean(next.active), acknowledgementState: next.acknowledgement_state, requestedAt: next.requested_at, acknowledgedAt: next.acknowledged_at });
+      try {
+        const deviceOrigin = await deliverDeviceAcknowledgement(deviceId);
+        const confirmedAt = new Date().toISOString();
+        db.prepare("UPDATE device_alarm_state SET acknowledgement_state = 'CONFIRMED', acknowledged_at = ?, updated_at = ? WHERE shipment_id = ? AND device_id = ?").run(confirmedAt, confirmedAt, shipmentId, deviceId);
+        appendLedger(shipmentId, "ALARM_ACKNOWLEDGED", `Buzzer silenced by direct relay to ${deviceId}`, confirmedAt);
+        return send(response, 200, { active: true, acknowledgementState: "CONFIRMED", acknowledgedAt: confirmedAt, deviceOrigin });
+      } catch (error) {
+        const pending = alarmState(shipmentId, deviceId);
+        return send(response, 202, {
+          active: Boolean(pending.active),
+          acknowledgementState: pending.acknowledgement_state,
+          requestedAt: pending.requested_at,
+          acknowledgedAt: pending.acknowledged_at,
+          deliveryError: error instanceof Error ? error.message : "ESP32 did not respond",
+        });
+      }
     }
     const deviceAlarmMatch = url.pathname.match(/^\/api\/devices\/([^/]+)\/alarm$/);
     if (deviceAlarmMatch && request.method === "GET") {
       const deviceId = decodeURIComponent(deviceAlarmMatch[1]);
       const shipmentId = String(url.searchParams.get("shipmentId") || "demo-shipment");
       const state = alarmState(shipmentId, deviceId);
-      return send(response, 200, { acknowledge: Boolean(state.active) && state.acknowledgement_state === "PENDING" });
+      // Keep returning the command after confirmation so a rebooted ESP32 can
+      // restore the silenced state while the same breach remains active.
+      return send(response, 200, {
+        acknowledge:
+          Boolean(state.active) &&
+          (state.acknowledgement_state === "PENDING" || state.acknowledgement_state === "CONFIRMED"),
+      });
     }
     if (deviceAlarmMatch && request.method === "POST") {
       if (apiKey && request.headers["x-api-key"] !== apiKey) return send(response, 401, { error: "Unauthorized device" });
@@ -227,6 +277,9 @@ const server = createServer(async (request, response) => {
       const body = await readBody(request);
       const shipmentId = String(body.shipmentId || "demo-shipment");
       const state = alarmState(shipmentId, deviceId);
+      if (state.active && state.acknowledgement_state === "CONFIRMED") {
+        return send(response, 200, { active: true, acknowledgementState: "CONFIRMED", acknowledgedAt: state.acknowledged_at });
+      }
       if (!state.active || state.acknowledgement_state !== "PENDING") return send(response, 409, { error: "No pending acknowledgement" });
       const now = new Date().toISOString();
       db.prepare("UPDATE device_alarm_state SET acknowledgement_state = 'CONFIRMED', acknowledged_at = ?, updated_at = ? WHERE shipment_id = ? AND device_id = ?").run(now, now, shipmentId, deviceId);
@@ -238,6 +291,8 @@ const server = createServer(async (request, response) => {
       const body = await readBody(request);
       const shipmentId = String(body.shipmentId || "demo-shipment");
       const deviceId = String(body.deviceId || "vault-device-01");
+      const deviceHost = normalizeDeviceHost(request.socket.remoteAddress);
+      if (deviceHost) deviceHosts.set(deviceId, deviceHost);
       const temperature = Number(body.temperature);
       const humidity = body.humidity === undefined ? null : Number(body.humidity);
       if (!Number.isFinite(temperature) || temperature < -80 || temperature > 100) return send(response, 400, { error: "temperature must be a finite value between -80 and 100" });

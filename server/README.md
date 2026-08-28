@@ -27,5 +27,10 @@ Set `TELEGRAM_BOT_TOKEN` to enable automatic excursion alerts. The chat ID is
 stored per organisation through the authenticated Telegram configuration route.
 Without both values, ingestion succeeds and reports `telegram.skipped: true`.
 
+The API learns the ESP32's current LAN address from every reading upload. An
+alarm acknowledgement is relayed immediately to the board's `/ack` endpoint;
+the device polling endpoints remain as a firmware fallback. Set
+`VAULT_DEVICE_URL` only when the device must use a fixed explicit origin.
+
 This layer is intentionally separate from the browser provider until the API
 contract is exercised and the frontend data-source swap is made as its own step.

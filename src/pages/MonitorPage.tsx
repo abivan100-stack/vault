@@ -197,14 +197,14 @@ export default function MonitorPage() {
                   variant={acknowledgementConfirmed ? "outline" : "default"}
                   className="w-full justify-center"
                   onClick={() => void acknowledgeAlarm().catch(() => undefined)}
-                  disabled={acknowledgementPending || acknowledgementConfirmed}
+                  disabled={acknowledgementConfirmed}
                   aria-label="Acknowledge active hardware alarm"
                 >
                   {acknowledgementConfirmed ? <Check aria-hidden="true" /> : <BellOff aria-hidden="true" />}
                   {acknowledgementConfirmed
                     ? "Alarm acknowledged"
                     : acknowledgementPending
-                      ? "Acknowledging…"
+                      ? "Retry acknowledgement"
                       : "Acknowledge alarm"}
                 </Button>
               </div>

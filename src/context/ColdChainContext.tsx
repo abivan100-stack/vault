@@ -607,13 +607,18 @@ export function ColdChainProvider({ children }: { children: ReactNode }) {
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ shipmentId: VAULT_API_SHIPMENT_ID, deviceId: VAULT_API_DEVICE_ID }),
     });
-    const payload = (await response.json()) as { acknowledgementState?: AlarmAcknowledgementState; error?: string };
+    const payload = (await response.json()) as {
+      acknowledgementState?: AlarmAcknowledgementState;
+      deliveryError?: string;
+      error?: string;
+    };
     if (!response.ok) {
       const message = payload.error || "Could not request the hardware acknowledgement.";
       setAcknowledgementError(message);
       throw new Error(message);
     }
     setAlarmAcknowledgementState(payload.acknowledgementState || "PENDING");
+    if (payload.deliveryError) setAcknowledgementError(`${payload.deliveryError}. Retry after the next device reading.`);
   }, []);
 
   // Prefer real ESP32 readings whenever the API is reachable. The local
@@ -634,7 +639,11 @@ export function ColdChainProvider({ children }: { children: ReactNode }) {
         );
         if (!alarmResponse.ok) throw new Error("Alarm state request failed");
         const alarm = (await alarmResponse.json()) as { acknowledgementState?: AlarmAcknowledgementState };
-        if (!cancelled) setAlarmAcknowledgementState(alarm.acknowledgementState || "NONE");
+        if (!cancelled) {
+          const nextAcknowledgementState = alarm.acknowledgementState || "NONE";
+          setAlarmAcknowledgementState(nextAcknowledgementState);
+          if (nextAcknowledgementState !== "PENDING") setAcknowledgementError(null);
+        }
         const incoming = (payload.readings || [])
           .filter((item) => Number.isFinite(item.temperature) && Boolean(item.recorded_at))
           .slice(-READING_WINDOW)
