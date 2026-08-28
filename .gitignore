@@ -1,0 +1,18 @@
+node_modules/
+dist/
+coverage/
+data/*.db*
+**/debug.log
+
+# Playwright MCP scratch output
+.playwright-mcp/
+*.local
+
+# Claude Code session worktrees
+.claude/worktrees/
+
+# Scratch screen captures taken while checking the app. Root level only, so
+# real assets committed under src/ are still tracked.
+/*.png
+/*.jpg
+/*.gif
