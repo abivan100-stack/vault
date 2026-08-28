@@ -62,6 +62,7 @@ unsigned long lastVaultAlarmCheck = 0;
 // receives a fresh device value on each polling cycle.
 const unsigned long VAULT_UPLOAD_INTERVAL = 5000;
 const unsigned long VAULT_ALARM_CHECK_INTERVAL = 5000;
+const int VAULT_HTTP_TIMEOUT_MS = 1500;
 
 // =====================================================
 // STATUS
@@ -563,8 +564,8 @@ void sendReadingToVault(float temp, float hum) {
   WiFiClient client;
   Serial.print("Vault API: ");
   Serial.println(vaultApiUrl);
-  http.setConnectTimeout(5000);
-  http.setTimeout(5000);
+  http.setConnectTimeout(VAULT_HTTP_TIMEOUT_MS);
+  http.setTimeout(VAULT_HTTP_TIMEOUT_MS);
   http.useHTTP10(true);
   http.begin(client, vaultApiUrl);
   http.addHeader("Content-Type", "application/json");
@@ -609,8 +610,8 @@ void confirmVaultAlarmAcknowledgement() {
   HTTPClient http;
   WiFiClient client;
   String url = vaultAlarmUrl();
-  http.setConnectTimeout(5000);
-  http.setTimeout(5000);
+  http.setConnectTimeout(VAULT_HTTP_TIMEOUT_MS);
+  http.setTimeout(VAULT_HTTP_TIMEOUT_MS);
   http.useHTTP10(true);
   http.begin(client, url);
   http.addHeader("Content-Type", "application/json");
@@ -628,8 +629,8 @@ void checkVaultAlarmAcknowledgement() {
   HTTPClient http;
   WiFiClient client;
   String url = vaultAlarmUrl();
-  http.setConnectTimeout(5000);
-  http.setTimeout(5000);
+  http.setConnectTimeout(VAULT_HTTP_TIMEOUT_MS);
+  http.setTimeout(VAULT_HTTP_TIMEOUT_MS);
   http.useHTTP10(true);
   http.begin(client, url);
   int responseCode = http.GET();
