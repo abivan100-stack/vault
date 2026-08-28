@@ -1,5 +1,6 @@
 node_modules/
 dist/
+.vite/
 coverage/
 data/*.db*
 **/debug.log
