@@ -323,7 +323,7 @@ export function ColdChainProvider({ children }: { children: ReactNode }) {
     storedInvestigation && investigationPointerMatches(storedInvestigation, ledger, fieldLogMeta.logId)
       ? [...(storedInvestigation.coveredExcursionSequences ?? [])]
       : investigation.openEntry
-        ? coveredExcursionSequences(ledger, investigation.openEntry.sequence)
+        ? coveredExcursionSequences(ledger, investigation.openEntry.sequence - 1)
         : [],
   );
 
