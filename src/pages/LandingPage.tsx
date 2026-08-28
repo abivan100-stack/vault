@@ -85,10 +85,6 @@ export default function LandingPage() {
               View shipment
             </Button>
           </div>
-
-          <p className="mt-6 text-[12.5px] text-ink-subtle">
-            Runs entirely in this browser. No sensor, no backend, no account.
-          </p>
         </div>
 
         {/* Live preview */}
