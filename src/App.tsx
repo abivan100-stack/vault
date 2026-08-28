@@ -482,9 +482,8 @@ function Layout({ isDark, onToggleTheme }: { isDark: boolean; onToggleTheme: () 
 
       <footer className="border-t border-line">
         <div
-          className={`${PAGE_CONTAINER} flex flex-col gap-1 py-5 text-[12.5px] text-ink-subtle sm:flex-row sm:items-center sm:justify-between`}
+          className={`${PAGE_CONTAINER} flex flex-col gap-1 py-5 text-[12.5px] text-ink-subtle sm:flex-row sm:items-center sm:justify-end`}
         >
-          <span>Vault — frontend prototype, local simulation.</span>
           <span className="font-mono">Build 0.1.0</span>
         </div>
       </footer>
