@@ -372,6 +372,8 @@ describe("persisted investigation pointers", () => {
     const pointer = { openEntry, shipmentKey: "SHIP-01", ledgerHeadHash: chain[1].hash };
 
     expect(isPersistedInvestigationPointer(pointer)).toBe(true);
+    expect(isPersistedInvestigationPointer({ ...pointer, coveredExcursionSequences: [2, 5] })).toBe(true);
+    expect(isPersistedInvestigationPointer({ ...pointer, coveredExcursionSequences: [0] })).toBe(false);
     expect(isPersistedInvestigationPointer(openEntry)).toBe(false);
     expect(isPersistedInvestigationPointer({ ...pointer, shipmentKey: "" })).toBe(false);
   });

@@ -291,6 +291,9 @@ export function ColdChainProvider({ children }: { children: ReactNode }) {
   const latestValueRef = useRef(temperature);
   const statusRef = useRef<Status>(status);
   const sampleCountRef = useRef(0);
+  const nextLedgerSequenceRef = useRef(
+    ledger.length > 0 ? ledger[ledger.length - 1].sequence + 1 : 1,
+  );
   // Real state, not derived from `ledger` on every render: `ledger` is capped
   // at MAX_LEDGER_ENTRIES, so an old INVESTIGATION_OPEN can slide out of the
   // retained window while still logically open, and rescanning from scratch
@@ -313,6 +316,17 @@ export function ColdChainProvider({ children }: { children: ReactNode }) {
     return scanned;
   });
 
+  // Keep the complete set of excursions covered by the open Investigation.
+  // Unlike a scan of `ledger`, this survives the retained-window cap and is
+  // persisted alongside the investigation pointer.
+  const coveredExcursionsRef = useRef<number[]>(
+    storedInvestigation && investigationPointerMatches(storedInvestigation, ledger, fieldLogMeta.logId)
+      ? [...(storedInvestigation.coveredExcursionSequences ?? [])]
+      : investigation.openEntry
+        ? coveredExcursionSequences(ledger, investigation.openEntry.sequence)
+        : [],
+  );
+
   // Mirrors whether an Investigation is currently open, read/written
   // synchronously inside the interval callback so a run of excursions within
   // the same render cycle is absorbed rather than each opening its own
@@ -330,8 +344,11 @@ export function ColdChainProvider({ children }: { children: ReactNode }) {
     ledger.length > 0 ? ledger[ledger.length - 1].sequence : 0,
   );
 
-  const appendLedger = useCallback((event: LedgerEventType, detail: string, at: Date) => {
+  const appendLedger = useCallback((event: LedgerEventType, detail: string, at: Date): number => {
+    const sequence = nextLedgerSequenceRef.current;
+    nextLedgerSequenceRef.current += 1;
     setLedger((previous) => appendEntry(previous, event, detail, at));
+    return sequence;
   }, []);
 
   useEffect(() => {
@@ -379,6 +396,7 @@ export function ColdChainProvider({ children }: { children: ReactNode }) {
           openEntry: investigation.openEntry,
           shipmentKey: fieldLogMeta.logId,
           ledgerHeadHash: ledger.length > 0 ? ledger[ledger.length - 1].hash : "0".repeat(64),
+          coveredExcursionSequences: [...coveredExcursionsRef.current],
         }
       : null;
     writeStorage(OPEN_INVESTIGATION_KEY, pointer);
@@ -401,7 +419,7 @@ export function ColdChainProvider({ children }: { children: ReactNode }) {
       if (nextStatus !== statusRef.current) {
         statusRef.current = nextStatus;
         const movement = nextStatus === "EXCURSION" ? "left" : "back inside";
-        appendLedger(
+        const excursionSequence = appendLedger(
           nextStatus === "EXCURSION" ? "EXCURSION_OPEN" : "EXCURSION_CLEAR",
           `${value.toFixed(1)} °C — ${movement} safe corridor`,
           at,
@@ -411,13 +429,18 @@ export function ColdChainProvider({ children }: { children: ReactNode }) {
         // open, further breaches are absorbed into it rather than opening a
         // second — the operator is already on the hook for one unresolved
         // problem, not a new one per alarm.
-        if (nextStatus === "EXCURSION" && !investigationOpenRef.current) {
-          investigationOpenRef.current = true;
-          appendLedger(
-            "INVESTIGATION_OPEN",
-            `Investigation opened — triggered by excursion at ${value.toFixed(1)} °C`,
-            at,
+        if (nextStatus === "EXCURSION") {
+          coveredExcursionsRef.current = Array.from(
+            new Set([...coveredExcursionsRef.current, excursionSequence]),
           );
+          if (!investigationOpenRef.current) {
+            investigationOpenRef.current = true;
+            appendLedger(
+              "INVESTIGATION_OPEN",
+              `Investigation opened — triggered by excursion at ${value.toFixed(1)} °C`,
+              at,
+            );
+          }
         }
       }
 
@@ -482,6 +505,7 @@ export function ColdChainProvider({ children }: { children: ReactNode }) {
     // so `investigation` resets on its own once this append lands. Only the
     // interval callback's synchronous ref guard needs resetting here.
     investigationOpenRef.current = false;
+    coveredExcursionsRef.current = [];
 
     // The trail is append-only: a new shipment opens a new record on the same
     // chain rather than erasing what came before.
@@ -498,7 +522,14 @@ export function ColdChainProvider({ children }: { children: ReactNode }) {
       statusRef.current = "EXCURSION";
       setReadings((previous) => pushReading(previous, reading));
 
-      appendLedger("EXCURSION_OPEN", `${value.toFixed(1)} °C — simulated ${direction} excursion`, at);
+      const excursionSequence = appendLedger(
+        "EXCURSION_OPEN",
+        `${value.toFixed(1)} °C — simulated ${direction} excursion`,
+        at,
+      );
+      coveredExcursionsRef.current = Array.from(
+        new Set([...coveredExcursionsRef.current, excursionSequence]),
+      );
       if (!investigationOpenRef.current) {
         investigationOpenRef.current = true;
         appendLedger("INVESTIGATION_OPEN", `Investigation opened — simulated excursion at ${value.toFixed(1)} °C`, at);
@@ -527,11 +558,7 @@ export function ColdChainProvider({ children }: { children: ReactNode }) {
       const openEntry = investigation.openEntry;
       if (!openEntry) return;
 
-      // The triggering excursion is appended one sequence before its
-      // INVESTIGATION_OPEN, so the covered set starts there. Excursions that
-      // themselves aged out of the window are undercounted here — the same
-      // sliding-window limitation `verifyChain` already documents.
-      const covered = coveredExcursionSequences(ledger, openEntry.sequence - 1);
+      const covered = [...new Set(coveredExcursionsRef.current)].sort((a, b) => a - b);
       const coveredLabel =
         covered.length > 0
           ? `covered excursion${covered.length > 1 ? "s" : ""} ${covered.map((sequence) => `#${sequence}`).join(", ")}`
@@ -546,8 +573,9 @@ export function ColdChainProvider({ children }: { children: ReactNode }) {
       // this INVESTIGATION_RESOLVED entry lands, but the interval callback's
       // guard is a plain ref and must be reset here, synchronously.
       investigationOpenRef.current = false;
+      coveredExcursionsRef.current = [];
     },
-    [appendLedger, ledger, investigation],
+    [appendLedger, investigation],
   );
 
   const chartPath = useMemo(

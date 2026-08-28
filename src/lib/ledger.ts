@@ -181,6 +181,8 @@ export type PersistedInvestigationPointer = {
   openEntry: LedgerEntry;
   shipmentKey: string;
   ledgerHeadHash: string;
+  /** Full excursion coverage; optional for pointers written before v1.1. */
+  coveredExcursionSequences?: number[];
 };
 
 export function isPersistedInvestigationPointer(value: unknown): value is PersistedInvestigationPointer {
@@ -192,7 +194,12 @@ export function isPersistedInvestigationPointer(value: unknown): value is Persis
     typeof candidate.shipmentKey === "string" &&
     candidate.shipmentKey.length > 0 &&
     typeof candidate.ledgerHeadHash === "string" &&
-    HEX_64.test(candidate.ledgerHeadHash)
+    HEX_64.test(candidate.ledgerHeadHash) &&
+    (candidate.coveredExcursionSequences === undefined ||
+      (Array.isArray(candidate.coveredExcursionSequences) &&
+        candidate.coveredExcursionSequences.every(
+          (sequence) => typeof sequence === "number" && Number.isInteger(sequence) && sequence >= 1,
+        )))
   );
 }
 
