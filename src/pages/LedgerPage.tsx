@@ -27,6 +27,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  GENESIS_HASH,
   RESOLUTION_REASONS,
   coveredExcursionSequences,
   describeVerification,
@@ -38,7 +39,7 @@ import {
   type LedgerEventType,
   type ResolutionReason,
 } from "@/lib/ledger";
-import { CHART_MAX_C, CHART_MIN_C, SAFE_MAX_C, SAFE_MIN_C, isExcursion, toDomainPercent } from "@/lib/chart";
+import { SAFE_MAX_C, SAFE_MIN_C, isExcursion } from "@/lib/chart";
 import { shortHash } from "@/lib/hash";
 import { formatClock, formatDayLabel, formatIsoDate } from "@/lib/simulation";
 import { downloadCsv, toCsv } from "@/lib/csv";
@@ -94,78 +95,6 @@ function eventTone(event: LedgerEventType): "success" | "warning" | "brand" | "n
   return "neutral";
 }
 
-/**
- * The node on the spine.
- *
- * A reading is a small unlabelled tick — there are hundreds of them and they
- * are the background rhythm. Everything else is a filled node in its tone,
- * because those are the moments someone scanning the trail is looking for.
- */
-function ChainNode({ event }: { event: LedgerEventType }) {
-  if (event === "TEMPERATURE_READING") {
-    return (
-      <span className="block h-1.5 w-1.5 rounded-full bg-line-strong ring-4 ring-raised" aria-hidden="true" />
-    );
-  }
-  const tone = eventTone(event);
-  const fill =
-    tone === "warning"
-      ? "bg-warning"
-      : tone === "success"
-        ? "bg-success"
-        : tone === "brand"
-          ? "bg-brand"
-          : "bg-ink-subtle";
-  return <span className={`block h-2.5 w-2.5 rounded-full ${fill} ring-4 ring-raised`} aria-hidden="true" />;
-}
-
-/**
- * One reading, placed on a miniature of the corridor it was measured against.
- *
- * This is the column that used to be empty. The marker's position carries the
- * value, the tinted band carries the corridor, and a reading outside it is
- * visibly outside it rather than being a number you have to compare against a
- * threshold you are expected to remember.
- */
-function CorridorTrace({ value }: { value: number }) {
-  const outside = isExcursion(value);
-  return (
-    <span
-      className="relative block h-4 min-w-[90px] flex-1"
-      title={`${value.toFixed(1)} °C within the ${CHART_MIN_C}–${CHART_MAX_C} °C simulated range; safe corridor ${SAFE_MIN_C}–${SAFE_MAX_C} °C`}
-    >
-      <span className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-line" aria-hidden="true" />
-      <span
-        className="absolute top-1/2 h-1.5 -translate-y-1/2 rounded-full bg-brand-soft"
-        style={{
-          left: `${toDomainPercent(SAFE_MIN_C)}%`,
-          right: `${100 - toDomainPercent(SAFE_MAX_C)}%`,
-        }}
-        aria-hidden="true"
-      />
-      {/* The corridor limits, ticked. The band alone fills most of the track,
-          so without these the two edges that actually decide SAFE from
-          EXCURSION are the least visible thing on it. */}
-      {[SAFE_MIN_C, SAFE_MAX_C].map((limit) => (
-        <span
-          key={limit}
-          className="absolute top-1/2 h-3 w-px -translate-y-1/2 bg-line-strong"
-          style={{ left: `${toDomainPercent(limit)}%` }}
-          aria-hidden="true"
-        />
-      ))}
-      <span
-        className="absolute top-1/2 h-2 w-2 -translate-x-1/2 -translate-y-1/2 rounded-full"
-        style={{
-          left: `${toDomainPercent(value)}%`,
-          backgroundColor: outside ? "var(--warning)" : "var(--brand)",
-        }}
-        aria-hidden="true"
-      />
-    </span>
-  );
-}
-
 function HashButton({
   hash,
   copiedHash,
@@ -194,7 +123,33 @@ function HashButton({
   );
 }
 
-function ChainLink({
+/**
+ * The trail, as a table.
+ *
+ * An earlier revision drew each reading as a marker on a miniature of the safe
+ * corridor, hung off a vertical spine. It was the widest element on the row and
+ * carried a single fact -- one the value column already stated in text -- while
+ * the fields that make an entry auditable were squeezed into the margins. The
+ * design assumed a mixed trail that the simulated cadence does not produce: a
+ * ledger append every ten seconds is almost entirely readings, so the events
+ * that were meant to punctuate the trace are rare enough that the page read as
+ * a chart of one flat line.
+ *
+ * So: columns, with a header naming them. `Prev` sits beside `Digest` because
+ * the link each entry commits to is the point of the structure, and drawing a
+ * decorative line down the page asserted it without ever showing it.
+ */
+
+const COLUMNS: { key: string; label: string; className: string }[] = [
+  { key: "sequence", label: "#", className: "w-[56px]" },
+  { key: "time", label: "Time", className: "w-[84px]" },
+  { key: "event", label: "Event", className: "w-[124px]" },
+  { key: "detail", label: "Detail", className: "" },
+  { key: "prev", label: "Prev", className: "w-[136px]" },
+  { key: "digest", label: "Digest", className: "w-[156px]" },
+];
+
+function LedgerRow({
   entry,
   copiedHash,
   onCopy,
@@ -206,69 +161,74 @@ function ChainLink({
   highlighted: boolean;
 }) {
   const value = readingCelsius(entry);
-  const isReading = entry.event === "TEMPERATURE_READING";
+  const outsideCorridor = value !== null && isExcursion(value);
 
   return (
-    <li
-      className={`relative flex items-center gap-3 py-2 pl-12 pr-3 transition-colors ${
-        highlighted ? "bg-brand-soft" : "hover:bg-sunken"
-      }`}
-    >
-      <span className="absolute left-[22px] top-1/2 flex -translate-x-1/2 -translate-y-1/2">
-        <ChainNode event={entry.event} />
-      </span>
-
-      <span className="tabular w-[34px] shrink-0 font-mono text-[11.5px] text-ink-subtle">
+    <tr className={highlighted ? "bg-brand-soft" : "transition-colors hover:bg-sunken"}>
+      <td className="tabular px-3 py-1.5 font-mono text-[11.5px] text-ink-subtle">
         {String(entry.sequence).padStart(3, "0")}
-      </span>
+      </td>
 
-      {/* A reading needs no label: the trace and the value say everything the
-          word "reading" would have. Every other event is named, because the
-          name is the information. */}
-      {isReading && value !== null ? (
-        <>
-          <CorridorTrace value={value} />
-          <span
-            className={`tabular w-[58px] shrink-0 text-right font-mono text-[12.5px] ${
-              isExcursion(value) ? "text-warning" : "text-ink"
-            }`}
-          >
-            {value.toFixed(1)} °C
-          </span>
-        </>
-      ) : (
-        <>
-          <StatusPill tone={eventTone(entry.event)} size="sm" className="shrink-0">
+      <td className="px-3 py-1.5">
+        <time dateTime={entry.at} className="tabular font-mono text-[11.5px] text-ink-subtle">
+          {formatClock(entry.at)}
+        </time>
+      </td>
+
+      <td className="whitespace-nowrap px-3 py-1.5">
+        {entry.event === "TEMPERATURE_READING" ? (
+          <span className="text-[12.5px] text-ink-muted">{shortEventLabel(entry.event)}</span>
+        ) : (
+          <StatusPill tone={eventTone(entry.event)} size="sm">
             {shortEventLabel(entry.event)}
           </StatusPill>
-          <span className="min-w-0 flex-1 truncate text-[13px] text-ink" title={entry.detail}>
+        )}
+      </td>
+
+      {/* A reading's detail is its value, so it is set as a value: right-aligned
+          in the column's own width, warning-toned when it left the corridor.
+          Every other event carries prose, which is left as prose. */}
+      <td className="min-w-0 px-3 py-1.5">
+        {value !== null ? (
+          <span
+            className={`tabular font-mono text-[12.5px] ${
+              outsideCorridor ? "text-warning" : "text-ink"
+            }`}
+          >
+            {value.toFixed(1)} &deg;C
+          </span>
+        ) : (
+          <span className="block truncate text-[13px] text-ink" title={entry.detail}>
             {entry.detail}
           </span>
-        </>
-      )}
+        )}
+      </td>
 
-      <time
-        dateTime={entry.at}
-        className="tabular hidden shrink-0 font-mono text-[11.5px] text-ink-subtle sm:block"
-      >
-        {formatClock(entry.at)}
-      </time>
+      <td className="whitespace-nowrap px-3 py-1.5">
+        <span
+          className="tabular font-mono text-[11.5px] text-ink-subtle"
+          title={entry.prevHash === GENESIS_HASH ? "Genesis -- no previous entry" : entry.prevHash}
+        >
+          {entry.prevHash === GENESIS_HASH ? "genesis" : shortHash(entry.prevHash)}
+        </span>
+      </td>
 
-      <HashButton hash={entry.hash} copiedHash={copiedHash} onCopy={onCopy} />
-    </li>
+      <td className="whitespace-nowrap px-3 py-1.5">
+        <HashButton hash={entry.hash} copiedHash={copiedHash} onCopy={onCopy} />
+      </td>
+    </tr>
   );
 }
 
 /**
- * The chain itself: a continuous spine with the entries hung off it, broken by
- * a heading whenever the day changes.
+ * The trail itself. Newest first, so it runs backwards in time down the page,
+ * broken by a heading whenever the day changes.
  *
- * Newest first, so the spine runs backwards in time down the page. The day
- * headings are what let the timestamp column drop the date — it was repeating
- * the same eight characters on every row of a console that mostly shows one
- * shipment on one day.
+ * The day headings are what let the Time column drop the date -- it was
+ * repeating the same eight characters on every row of a console that mostly
+ * shows one shipment on one day.
  */
-function LedgerChain({
+function LedgerTable({
   entries,
   copiedHash,
   onCopy,
@@ -285,26 +245,29 @@ function LedgerChain({
     return <p className="px-5 py-12 text-center text-[13px] text-ink-muted">{emptyMessage}</p>;
   }
 
-  // One flat list, with the day headings interleaved as their own items —
-  // rather than nesting a list per day, which would make the spine restart.
-  const items: JSX.Element[] = [];
+  // One flat body with the day headings interleaved as their own rows, rather
+  // than a tbody per day -- a table cannot nest and the zebra would restart.
+  const rows: JSX.Element[] = [];
   let previousDay: string | null = null;
 
   for (const entry of entries) {
     const day = formatIsoDate(entry.at);
     if (day !== previousDay) {
       previousDay = day;
-      items.push(
-        <li key={`day-${day}`} className="relative flex items-center gap-3 bg-raised py-2 pl-12 pr-3">
-          <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-subtle">
+      rows.push(
+        <tr key={`day-${day}`}>
+          <th
+            scope="colgroup"
+            colSpan={COLUMNS.length}
+            className="border-y border-line bg-sunken px-3 py-1.5 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-subtle"
+          >
             {formatDayLabel(entry.at)}
-          </span>
-          <span className="h-px flex-1 bg-line" aria-hidden="true" />
-        </li>,
+          </th>
+        </tr>,
       );
     }
-    items.push(
-      <ChainLink
+    rows.push(
+      <LedgerRow
         key={entry.hash}
         entry={entry}
         copiedHash={copiedHash}
@@ -315,15 +278,26 @@ function LedgerChain({
   }
 
   return (
-    <ol className="relative">
-      {/* The spine. Behind the nodes, which carry a ring in the row's own
-          background colour so the line appears to pass under them. */}
-      <span
-        className="pointer-events-none absolute bottom-3 left-[22px] top-3 w-px bg-line"
-        aria-hidden="true"
-      />
-      {items}
-    </ol>
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[620px] border-collapse text-left">
+        <thead>
+          {/* Sticky because the full trail opens in a scrolling dialog, where a
+              header that scrolls away leaves six unlabelled columns. */}
+          <tr className="sticky top-0 z-10 bg-raised">
+            {COLUMNS.map((column) => (
+              <th
+                key={column.key}
+                scope="col"
+                className={`border-b border-line px-3 pb-2 pt-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-subtle ${column.className}`}
+              >
+                {column.label}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-line">{rows}</tbody>
+      </table>
+    </div>
   );
 }
 
@@ -596,7 +570,7 @@ export default function LedgerPage() {
       )}
 
       <Card className="overflow-hidden">
-        <LedgerChain
+        <LedgerTable
           entries={rows}
           copiedHash={copiedHash}
           onCopy={handleCopy}
@@ -609,8 +583,7 @@ export default function LedgerPage() {
         <span>
           Showing {rows.length} of {filtered.length} matching · {ledger.length} retained ·{" "}
           <span className="text-ink-muted">
-            marker position is the reading within {CHART_MIN_C}–{CHART_MAX_C} °C; the band is the{" "}
-            {SAFE_MIN_C}–{SAFE_MAX_C} °C corridor
+            each entry's Prev is the previous entry's digest; safe corridor {SAFE_MIN_C}–{SAFE_MAX_C} °C
           </span>
         </span>
         <button
@@ -634,7 +607,7 @@ export default function LedgerPage() {
           </DialogHeader>
 
           <div className="max-h-[58vh] overflow-auto">
-            <LedgerChain
+            <LedgerTable
               entries={filtered}
               copiedHash={copiedHash}
               onCopy={handleCopy}
