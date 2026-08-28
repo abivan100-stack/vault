@@ -61,6 +61,16 @@ db.exec(`
     user_id TEXT NOT NULL REFERENCES users(id),
     created_at TEXT NOT NULL
   );
+  CREATE TABLE IF NOT EXISTS device_alarm_state (
+    shipment_id TEXT NOT NULL,
+    device_id TEXT NOT NULL,
+    active INTEGER NOT NULL DEFAULT 0,
+    acknowledgement_state TEXT NOT NULL DEFAULT 'NONE',
+    requested_at TEXT,
+    acknowledged_at TEXT,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY (shipment_id, device_id)
+  );
 `);
 try { db.exec("ALTER TABLE organizations ADD COLUMN telegram_chat_id TEXT"); } catch { /* already present */ }
 
@@ -105,6 +115,26 @@ function ensureShipment(shipmentId) {
   const now = new Date().toISOString();
   db.prepare("INSERT INTO shipments (id, box, batch, product, doses, corridor, route, started_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)").run(shipmentId, "ESP32-BOX-01", "UNASSIGNED", "Unspecified payload", "—", "2–8 °C", "Unknown → Unknown", now);
   appendLedger(shipmentId, "SHIPMENT_CREATE", "Created by device ingestion", now);
+}
+
+function updateAlarmState(shipmentId, deviceId, status, recordedAt) {
+  const existing = db.prepare("SELECT active FROM device_alarm_state WHERE shipment_id = ? AND device_id = ?").get(shipmentId, deviceId);
+  if (status === "SAFE") {
+    if (existing) {
+      db.prepare("UPDATE device_alarm_state SET active = 0, acknowledgement_state = 'NONE', requested_at = NULL, acknowledged_at = NULL, updated_at = ? WHERE shipment_id = ? AND device_id = ?").run(recordedAt, shipmentId, deviceId);
+    }
+    return;
+  }
+  if (existing?.active) {
+    db.prepare("UPDATE device_alarm_state SET updated_at = ? WHERE shipment_id = ? AND device_id = ?").run(recordedAt, shipmentId, deviceId);
+    return;
+  }
+  db.prepare("INSERT INTO device_alarm_state (shipment_id, device_id, active, acknowledgement_state, requested_at, acknowledged_at, updated_at) VALUES (?, ?, 1, 'UNACKNOWLEDGED', NULL, NULL, ?) ON CONFLICT(shipment_id, device_id) DO UPDATE SET active = 1, acknowledgement_state = 'UNACKNOWLEDGED', requested_at = NULL, acknowledged_at = NULL, updated_at = excluded.updated_at").run(shipmentId, deviceId, recordedAt);
+}
+
+function alarmState(shipmentId, deviceId) {
+  return db.prepare("SELECT active, acknowledgement_state, requested_at, acknowledged_at, updated_at FROM device_alarm_state WHERE shipment_id = ? AND device_id = ?").get(shipmentId, deviceId)
+    || { active: 0, acknowledgement_state: "NONE", requested_at: null, acknowledged_at: null, updated_at: null };
 }
 
 function publicUser(user) {
@@ -159,6 +189,50 @@ const server = createServer(async (request, response) => {
       const rows = shipmentId ? db.prepare("SELECT * FROM ledger WHERE shipment_id = ? ORDER BY sequence ASC").all(shipmentId) : db.prepare("SELECT * FROM ledger ORDER BY sequence ASC").all();
       return send(response, 200, { entries: rows });
     }
+    if (request.method === "GET" && url.pathname === "/api/alarms/status") {
+      const shipmentId = String(url.searchParams.get("shipmentId") || "demo-shipment");
+      const deviceId = String(url.searchParams.get("deviceId") || "vault-device-01");
+      const state = alarmState(shipmentId, deviceId);
+      return send(response, 200, {
+        active: Boolean(state.active),
+        acknowledgementState: state.acknowledgement_state,
+        requestedAt: state.requested_at,
+        acknowledgedAt: state.acknowledged_at,
+      });
+    }
+    if (request.method === "POST" && url.pathname === "/api/alarms/acknowledge") {
+      const body = await readBody(request);
+      const shipmentId = String(body.shipmentId || "demo-shipment");
+      const deviceId = String(body.deviceId || "vault-device-01");
+      const state = alarmState(shipmentId, deviceId);
+      if (!state.active) return send(response, 409, { error: "There is no active device alarm to acknowledge" });
+      const now = new Date().toISOString();
+      if (state.acknowledgement_state === "UNACKNOWLEDGED") {
+        db.prepare("UPDATE device_alarm_state SET acknowledgement_state = 'PENDING', requested_at = ?, updated_at = ? WHERE shipment_id = ? AND device_id = ?").run(now, now, shipmentId, deviceId);
+        appendLedger(shipmentId, "ALARM_ACKNOWLEDGEMENT_REQUESTED", `Website acknowledgement requested for ${deviceId}`, now);
+      }
+      const next = alarmState(shipmentId, deviceId);
+      return send(response, 202, { active: Boolean(next.active), acknowledgementState: next.acknowledgement_state, requestedAt: next.requested_at, acknowledgedAt: next.acknowledged_at });
+    }
+    const deviceAlarmMatch = url.pathname.match(/^\/api\/devices\/([^/]+)\/alarm$/);
+    if (deviceAlarmMatch && request.method === "GET") {
+      const deviceId = decodeURIComponent(deviceAlarmMatch[1]);
+      const shipmentId = String(url.searchParams.get("shipmentId") || "demo-shipment");
+      const state = alarmState(shipmentId, deviceId);
+      return send(response, 200, { acknowledge: Boolean(state.active) && state.acknowledgement_state === "PENDING" });
+    }
+    if (deviceAlarmMatch && request.method === "POST") {
+      if (apiKey && request.headers["x-api-key"] !== apiKey) return send(response, 401, { error: "Unauthorized device" });
+      const deviceId = decodeURIComponent(deviceAlarmMatch[1]);
+      const body = await readBody(request);
+      const shipmentId = String(body.shipmentId || "demo-shipment");
+      const state = alarmState(shipmentId, deviceId);
+      if (!state.active || state.acknowledgement_state !== "PENDING") return send(response, 409, { error: "No pending acknowledgement" });
+      const now = new Date().toISOString();
+      db.prepare("UPDATE device_alarm_state SET acknowledgement_state = 'CONFIRMED', acknowledged_at = ?, updated_at = ? WHERE shipment_id = ? AND device_id = ?").run(now, now, shipmentId, deviceId);
+      appendLedger(shipmentId, "ALARM_ACKNOWLEDGED", `Buzzer silenced by ${deviceId}`, now);
+      return send(response, 200, { active: true, acknowledgementState: "CONFIRMED", acknowledgedAt: now });
+    }
     if (request.method === "POST" && url.pathname === "/api/readings") {
       if (apiKey && request.headers["x-api-key"] !== apiKey) return send(response, 401, { error: "Unauthorized device" });
       const body = await readBody(request);
@@ -172,6 +246,7 @@ const server = createServer(async (request, response) => {
       ensureShipment(shipmentId);
       const status = statusFor(temperature);
       const reading = db.prepare("INSERT INTO readings (shipment_id, device_id, temperature, humidity, status, recorded_at) VALUES (?, ?, ?, ?, ?, ?) RETURNING *").get(shipmentId, deviceId, temperature, humidity, status, recordedAt);
+      updateAlarmState(shipmentId, deviceId, status, recordedAt);
       const entry = appendLedger(shipmentId, "TEMPERATURE_READING", `${temperature.toFixed(1)} °C · ${status}`, recordedAt);
       let telegram = { sent: false, skipped: true };
       if (status !== "SAFE") {

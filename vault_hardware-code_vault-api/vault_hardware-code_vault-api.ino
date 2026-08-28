@@ -57,7 +57,11 @@ unsigned long lastLCDUpdate = 0;
 const unsigned long DHT_INTERVAL = 2000;
 const unsigned long LCD_INTERVAL = 1000;
 unsigned long lastVaultUpload = 0;
-const unsigned long VAULT_UPLOAD_INTERVAL = 10000;
+unsigned long lastVaultAlarmCheck = 0;
+// Upload the latest sensor reading every 5 seconds so the Vault dashboard
+// receives a fresh device value on each polling cycle.
+const unsigned long VAULT_UPLOAD_INTERVAL = 5000;
+const unsigned long VAULT_ALARM_CHECK_INTERVAL = 1000;
 
 // =====================================================
 // STATUS
@@ -592,6 +596,49 @@ void sendReadingToVault(float temp, float hum) {
   http.end();
 }
 
+String vaultAlarmUrl() {
+  String url = String(vaultApiUrl);
+  url.replace("/api/readings", "/api/devices/" + String(vaultDeviceId) + "/alarm?shipmentId=" + String(vaultShipmentId));
+  return url;
+}
+
+void confirmVaultAlarmAcknowledgement() {
+  HTTPClient http;
+  WiFiClient client;
+  String url = vaultAlarmUrl();
+  http.setConnectTimeout(5000);
+  http.setTimeout(5000);
+  http.begin(client, url);
+  http.addHeader("Content-Type", "application/json");
+  String body = "{\"shipmentId\":\"" + String(vaultShipmentId) + "\"}";
+  int responseCode = http.POST(body);
+  Serial.print("Vault alarm acknowledgement response: ");
+  Serial.println(responseCode);
+  http.end();
+}
+
+void checkVaultAlarmAcknowledgement() {
+  if (WiFi.status() != WL_CONNECTED || millis() - lastVaultAlarmCheck < VAULT_ALARM_CHECK_INTERVAL) return;
+  lastVaultAlarmCheck = millis();
+
+  HTTPClient http;
+  WiFiClient client;
+  String url = vaultAlarmUrl();
+  http.setConnectTimeout(5000);
+  http.setTimeout(5000);
+  http.begin(client, url);
+  int responseCode = http.GET();
+  String response = responseCode == 200 ? http.getString() : "";
+  http.end();
+
+  if (responseCode == 200 && response.indexOf("\"acknowledge\":true") >= 0 && getStatus() != "SAFE") {
+    alarmAcknowledged = true;
+    digitalWrite(BUZZER_PIN, LOW);
+    Serial.println("ALARM ACKNOWLEDGED FROM VAULT WEBSITE");
+    confirmVaultAlarmAcknowledgement();
+  }
+}
+
 // =====================================================
 // SETUP
 // =====================================================
@@ -774,11 +821,6 @@ void loop() {
     temperature = newTemp;
     humidity = newHumidity;
 
-    if (millis() - lastVaultUpload >= VAULT_UPLOAD_INTERVAL) {
-      lastVaultUpload = millis();
-      sendReadingToVault(temperature, humidity);
-    }
-
     bool breach =
       temperature < MIN_SAFE_TEMP ||
       temperature > MAX_SAFE_TEMP;
@@ -885,6 +927,16 @@ void loop() {
 
     Serial.println();
   }
+
+  // Keep network uploads independent from the 2-second DHT sampling cycle.
+  // This produces a true 5-second cadence instead of 2, 4, 6-second drift.
+  if (!isnan(temperature) && !isnan(humidity) &&
+      millis() - lastVaultUpload >= VAULT_UPLOAD_INTERVAL) {
+    lastVaultUpload = millis();
+    sendReadingToVault(temperature, humidity);
+  }
+
+  checkVaultAlarmAcknowledgement();
 
   // ===================================================
   // LCD UPDATE

@@ -11,7 +11,10 @@ Endpoints:
 - `GET /api/health`
 - `GET /api/readings?shipmentId=...`
 - `GET /api/ledger?shipmentId=...`
+- `GET /api/alarms/status?shipmentId=...&deviceId=...`
 - `POST /api/readings` with `{ shipmentId, deviceId, temperature, humidity, timestamp }`
+- `POST /api/alarms/acknowledge` with `{ shipmentId, deviceId }`
+- `GET` / `POST /api/devices/:deviceId/alarm` for ESP32 acknowledgement polling and confirmation
 - `POST /api/auth/register` with `{ email, password, organizationName }`
 - `POST /api/auth/login` with `{ email, password }`
 - `POST /api/organizations/telegram` with `{ chatId }` and `Authorization: Bearer <token>`

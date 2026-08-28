@@ -64,6 +64,9 @@ const SEED_TEMPERATURE = 4.8;
 const SAMPLES_PER_LEDGER_APPEND = Math.max(1, Math.round(LEDGER_INTERVAL_MS / SAMPLE_INTERVAL_MS));
 const VAULT_API_URL = "http://127.0.0.1:8787";
 const VAULT_API_SHIPMENT_ID = "TEST-01";
+const VAULT_API_DEVICE_ID = "esp32-vault-01";
+
+export type AlarmAcknowledgementState = "NONE" | "UNACKNOWLEDGED" | "PENDING" | "CONFIRMED";
 
 /** Event types surfaced in the notification bell. */
 const NOTIFIABLE_EVENTS: readonly LedgerEventType[] = [
@@ -201,6 +204,9 @@ type ColdChainValue = {
   notifications: LedgerEntry[];
   unreadNotificationCount: number;
   markNotificationsRead: () => void;
+  alarmAcknowledgementState: AlarmAcknowledgementState;
+  acknowledgementError: string | null;
+  acknowledgeAlarm: () => Promise<void>;
 };
 
 const ColdChainContext = createContext<ColdChainValue | null>(null);
@@ -209,6 +215,8 @@ export function ColdChainProvider({ children }: { children: ReactNode }) {
   const [isMonitoring, setIsMonitoring] = useState(true);
   const [readings, setReadings] = useState<Reading[]>(() => seedReadings(new Date()));
   const [liveApiAvailable, setLiveApiAvailable] = useState(false);
+  const [alarmAcknowledgementState, setAlarmAcknowledgementState] = useState<AlarmAcknowledgementState>("NONE");
+  const [acknowledgementError, setAcknowledgementError] = useState<string | null>(null);
 
   const [fieldLogMeta, setFieldLogMeta] = useState<FieldLogMeta>(() => {
     const fallback = createFieldLog(new Date(), randomSerial());
@@ -540,6 +548,22 @@ export function ColdChainProvider({ children }: { children: ReactNode }) {
     setNotificationsSeen((previous) => Math.max(previous, newest));
   }, [notifications]);
 
+  const acknowledgeAlarm = useCallback(async () => {
+    setAcknowledgementError(null);
+    const response = await fetch(`${VAULT_API_URL}/api/alarms/acknowledge`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ shipmentId: VAULT_API_SHIPMENT_ID, deviceId: VAULT_API_DEVICE_ID }),
+    });
+    const payload = (await response.json()) as { acknowledgementState?: AlarmAcknowledgementState; error?: string };
+    if (!response.ok) {
+      const message = payload.error || "Could not request the hardware acknowledgement.";
+      setAcknowledgementError(message);
+      throw new Error(message);
+    }
+    setAlarmAcknowledgementState(payload.acknowledgementState || "PENDING");
+  }, []);
+
   // Prefer real ESP32 readings whenever the API is reachable. The local
   // simulator remains available as a fallback for offline demos.
   useEffect(() => {
@@ -553,6 +577,12 @@ export function ColdChainProvider({ children }: { children: ReactNode }) {
         const payload = (await response.json()) as {
           readings?: Array<{ id: number; temperature: number; recorded_at: string }>;
         };
+        const alarmResponse = await fetch(
+          `${VAULT_API_URL}/api/alarms/status?shipmentId=${encodeURIComponent(VAULT_API_SHIPMENT_ID)}&deviceId=${encodeURIComponent(VAULT_API_DEVICE_ID)}`,
+        );
+        if (!alarmResponse.ok) throw new Error("Alarm state request failed");
+        const alarm = (await alarmResponse.json()) as { acknowledgementState?: AlarmAcknowledgementState };
+        if (!cancelled) setAlarmAcknowledgementState(alarm.acknowledgementState || "NONE");
         const incoming = (payload.readings || [])
           .filter((item) => Number.isFinite(item.temperature) && Boolean(item.recorded_at))
           .slice(-READING_WINDOW)
@@ -602,6 +632,9 @@ export function ColdChainProvider({ children }: { children: ReactNode }) {
       notifications,
       unreadNotificationCount,
       markNotificationsRead,
+      alarmAcknowledgementState,
+      acknowledgementError,
+      acknowledgeAlarm,
     }),
     [
       temperature,
@@ -625,6 +658,9 @@ export function ColdChainProvider({ children }: { children: ReactNode }) {
       notifications,
       unreadNotificationCount,
       markNotificationsRead,
+      alarmAcknowledgementState,
+      acknowledgementError,
+      acknowledgeAlarm,
     ],
   );
 
