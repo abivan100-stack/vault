@@ -47,8 +47,10 @@ WebServer server(80);
 float temperature = 0.0;
 float humidity = 0.0;
 
-bool alarmAcknowledged = false;
-bool previousBreach = false;
+// Keep the operator's acknowledgement across Wi-Fi/watchdog soft resets.
+// A safe reading or a newly opened excursion still clears it below.
+RTC_DATA_ATTR bool alarmAcknowledged = false;
+RTC_DATA_ATTR bool previousBreach = false;
 bool rtcWorking = false;
 
 unsigned long lastDHTRead = 0;
