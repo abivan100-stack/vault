@@ -208,7 +208,7 @@ type ColdChainValue = {
   markNotificationsRead: () => void;
   alarmAcknowledgementState: AlarmAcknowledgementState;
   acknowledgementError: string | null;
-  acknowledgeAlarm: () => Promise<void>;
+  acknowledgeAlarm: (force?: boolean) => Promise<void>;
 };
 
 const ColdChainContext = createContext<ColdChainValue | null>(null);
@@ -600,12 +600,12 @@ export function ColdChainProvider({ children }: { children: ReactNode }) {
     setNotificationsSeen((previous) => Math.max(previous, newest));
   }, [notifications]);
 
-  const acknowledgeAlarm = useCallback(async () => {
+  const acknowledgeAlarm = useCallback(async (force = false) => {
     setAcknowledgementError(null);
     const response = await fetch(`${VAULT_API_URL}/api/alarms/acknowledge`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ shipmentId: VAULT_API_SHIPMENT_ID, deviceId: VAULT_API_DEVICE_ID }),
+      body: JSON.stringify({ shipmentId: VAULT_API_SHIPMENT_ID, deviceId: VAULT_API_DEVICE_ID, force }),
     });
     const payload = (await response.json()) as {
       acknowledgementState?: AlarmAcknowledgementState;

@@ -253,16 +253,18 @@ const server = createServer(async (request, response) => {
       const body = await readBody(request);
       const shipmentId = String(body.shipmentId || "demo-shipment");
       const deviceId = String(body.deviceId || "vault-device-01");
+      const force = body.force === true;
       const state = alarmState(shipmentId, deviceId);
       if (!state.active) return send(response, 409, { error: "There is no active device alarm to acknowledge" });
-      if (state.acknowledgement_state === "CONFIRMED" && isFreshDeviceAcknowledgement(state)) {
+      if (!force && state.acknowledgement_state === "CONFIRMED" && isFreshDeviceAcknowledgement(state)) {
         return send(response, 200, { active: true, acknowledgementState: "CONFIRMED", acknowledgedAt: state.acknowledged_at });
       }
       const now = new Date().toISOString();
       if (state.acknowledgement_state === "UNACKNOWLEDGED" ||
+          force ||
           (state.acknowledgement_state === "CONFIRMED" && !isFreshDeviceAcknowledgement(state))) {
         db.prepare("UPDATE device_alarm_state SET acknowledgement_state = 'PENDING', requested_at = ?, updated_at = ? WHERE shipment_id = ? AND device_id = ?").run(now, now, shipmentId, deviceId);
-        appendLedger(shipmentId, "ALARM_ACKNOWLEDGEMENT_REQUESTED", `Website acknowledgement requested for ${deviceId}`, now);
+        appendLedger(shipmentId, "ALARM_ACKNOWLEDGEMENT_REQUESTED", `${force ? "Website acknowledgement retried" : "Website acknowledgement requested"} for ${deviceId}`, now);
       }
       try {
         const deviceOrigin = await deliverDeviceAcknowledgement(deviceId);

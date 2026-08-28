@@ -186,7 +186,7 @@ export default function MonitorPage() {
                   <p className="text-[13px] font-medium text-ink">Hardware alarm active</p>
                   <p className="mt-0.5 text-[12px] leading-relaxed text-ink-muted">
                     {acknowledgementConfirmed
-                      ? "Acknowledged by the ESP32 — buzzer silenced while the excursion remains open."
+                      ? "Acknowledged by the ESP32. Use acknowledge again if the buzzer resumes while this excursion remains open."
                       : acknowledgementPending
                         ? "Acknowledgement sent — waiting for the ESP32 to silence the buzzer."
                         : "The buzzer will continue until an operator acknowledges this excursion."}
@@ -196,13 +196,12 @@ export default function MonitorPage() {
                   type="button"
                   variant={acknowledgementConfirmed ? "outline" : "default"}
                   className="w-full justify-center"
-                  onClick={() => void acknowledgeAlarm().catch(() => undefined)}
-                  disabled={acknowledgementConfirmed}
+                  onClick={() => void acknowledgeAlarm(acknowledgementConfirmed).catch(() => undefined)}
                   aria-label="Acknowledge active hardware alarm"
                 >
                   {acknowledgementConfirmed ? <Check aria-hidden="true" /> : <BellOff aria-hidden="true" />}
                   {acknowledgementConfirmed
-                    ? "Alarm acknowledged"
+                    ? "Acknowledge again"
                     : acknowledgementPending
                       ? "Retry acknowledgement"
                       : "Acknowledge alarm"}
