@@ -155,9 +155,9 @@ function HelpDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-h-[90vh] max-w-[960px] gap-0 overflow-hidden p-0">
+      <DialogContent className="grid h-[min(820px,calc(100vh-2rem))] w-[min(960px,calc(100vw-2rem))] !max-w-none grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden p-0 sm:!max-w-none">
         <DialogHeader className="border-b border-line bg-raised px-6 py-6 sm:px-8">
-          <div className="flex flex-wrap items-start justify-between gap-5">
+          <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
             <div className="max-w-[600px]">
               <div className="mb-3 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-brand">
                 <span className="grid h-6 w-6 place-items-center rounded-md bg-brand-soft">
@@ -169,19 +169,19 @@ function HelpDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open
                 A clearer way to read the console
               </DialogTitle>
               <DialogDescription className="mt-2 max-w-[570px] text-[13.5px] leading-relaxed text-ink-muted">
-                Use this guide to move from a live reading to a defensible handoff. Vault is a local
-                Live hardware mode: the ESP32 sends readings to the Vault API, while account controls are being connected.
+                Use this guide to move from a live reading to a defensible handoff. Vault receives the ESP32
+                feed through its local API and records the operating context around each reading.
               </DialogDescription>
             </div>
-            <div className="rounded-lg border border-brand-line bg-brand-soft px-3.5 py-3 text-[12px] leading-snug text-brand-ink sm:max-w-[220px]">
+            <div className="w-full rounded-lg border border-brand-line bg-brand-soft px-3.5 py-3 text-[12px] leading-snug text-brand-ink lg:w-[220px] lg:shrink-0">
               <p className="font-semibold">Prototype boundary</p>
               <p className="mt-1 opacity-80">Treat the ledger as tamper evidence, not a signed guarantee.</p>
             </div>
           </div>
         </DialogHeader>
 
-        <div className="grid min-h-0 max-h-[67vh] md:grid-cols-[205px_minmax(0,1fr)]">
-          <nav className="hidden border-r border-line bg-sunken/45 p-4 md:block" aria-label="Help sections">
+        <div className="grid min-h-0 lg:grid-cols-[220px_minmax(0,1fr)]">
+          <nav className="hidden border-r border-line bg-sunken/45 p-4 lg:block" aria-label="Help sections">
             <p className="px-2 pb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-ink-subtle">In this guide</p>
             <div className="space-y-0.5">
               {sections.map(([id, label, Icon]) => (
@@ -197,7 +197,7 @@ function HelpDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open
             <div className="space-y-8">
               <section id="help-start" className="scroll-mt-5">
                 <SectionHeading number="01" title="Getting started" subtitle="Orient yourself in under a minute." />
-                <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                <div className="mt-4 grid grid-cols-[repeat(auto-fit,minmax(165px,1fr))] gap-3">
                   {[["01", "Read Monitor", "Watch the live corridor and the last 30 readings."], ["02", "Open Shipment", "Check the box, batch, route, and handoff state."], ["03", "Inspect Ledger", "Follow the retained events and run verification."]].map(([n, title, copy]) => (
                     <div key={n} className="rounded-lg border border-line bg-raised p-3.5 shadow-e1">
                       <span className="font-mono text-[11px] text-brand">{n}</span>
@@ -223,12 +223,12 @@ function HelpDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open
 
               <section id="help-temperature" className="scroll-mt-5">
                 <SectionHeading number="03" title="Temperature & breaches" subtitle={`The safe corridor is ${SAFE_MIN_C}–${SAFE_MAX_C} °C.`} />
-                <div className="mt-4 grid gap-3 sm:grid-cols-3">
+                <div className="mt-4 grid grid-cols-[repeat(auto-fit,minmax(165px,1fr))] gap-3">
                   <StateCard label="SAFE" tone="success" copy="Reading sits inside the corridor." />
                   <StateCard label="EXCURSION" tone="warning" copy="A reading crossed a boundary; the moment is logged." />
                   <StateCard label="RECOVERED" tone="brand" copy="Readings returned inside the corridor." />
                 </div>
-                <p className="mt-3 text-[13px] leading-relaxed text-ink-muted">A new reading is generated every 2 seconds. The ledger records readings every 10 seconds, plus excursion openings and clearings as they happen.</p>
+                <p className="mt-3 text-[13px] leading-relaxed text-ink-muted">The ESP32 samples its sensor every 2 seconds, uploads the latest reading every 5 seconds, and Vault records the received device events in its backend ledger.</p>
               </section>
 
               <section id="help-integrity" className="scroll-mt-5">
@@ -240,8 +240,8 @@ function HelpDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open
               </section>
 
               <section id="help-hardware" className="scroll-mt-5">
-                <SectionHeading number="05" title="Hardware connection" subtitle="This build is ready to explain the integration, not claim it." />
-                <div className="mt-4 rounded-lg border border-warning-line bg-warning-soft p-4"><p className="text-[13px] font-semibold text-ink">No sensor is attached to this browser prototype.</p><p className="mt-1 text-[13px] leading-relaxed text-ink-muted">The ESP32 + DHT22 + RTC setup belongs to the separate hardware path. A production connection would send authenticated readings to a backend before they appear here.</p></div>
+                <SectionHeading number="05" title="Hardware connection" subtitle="ESP32 readings arrive through the local Vault API." />
+                <div className="mt-4 rounded-lg border border-brand-line bg-brand-soft p-4"><p className="text-[13px] font-semibold text-ink">ESP32 → Vault API → Monitor</p><p className="mt-1 text-[13px] leading-relaxed text-ink-muted">The ESP32 samples the DHT22, uploads its latest reading every 5 seconds, and polls for alarm acknowledgements. Monitor refreshes from the local API; keep the API running and the board on the same network.</p></div>
               </section>
 
               <section id="help-verify" className="scroll-mt-5">
@@ -251,12 +251,12 @@ function HelpDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open
 
               <section id="help-troubleshoot" className="scroll-mt-5">
                 <SectionHeading number="07" title="Troubleshooting" subtitle="A few quick checks before clearing anything." />
-                <div className="mt-4 grid gap-3 sm:grid-cols-2"><Tip title="The reading is not moving" copy="Check that the API is running and the ESP32 is connected to the same network. Monitor refreshes readings automatically." /><Tip title="Verification is incomplete" copy="Some stored entries were unreadable. Preserve the reported state; use the recovery action only when you accept losing local demo data." /><Tip title="I need to change shipment details" copy="Go to Shipment → Manage. Read-only pages intentionally do not mutate the record." /><Tip title="I need a clean demo" copy="Create a new shipment from Manage. The append-only ledger records that transition instead of erasing history." /></div>
+                <div className="mt-4 grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-3"><Tip title="The reading is not moving" copy="Check that the API is running and the ESP32 is connected to the same network. Monitor refreshes readings automatically." /><Tip title="Verification is incomplete" copy="Some stored entries were unreadable. Preserve the reported state; use the recovery action only when you accept losing local demo data." /><Tip title="I need to change shipment details" copy="Go to Shipment → Manage. Read-only pages intentionally do not mutate the record." /><Tip title="I need a clean demo" copy="Create a new shipment from Manage. The append-only ledger records that transition instead of erasing history." /></div>
               </section>
 
               <section id="help-faq" className="scroll-mt-5">
                 <SectionHeading number="08" title="FAQ" subtitle="Short answers for the questions that come up most." />
-                <div className="mt-4 divide-y divide-line rounded-lg border border-line bg-raised px-4 shadow-e1">{[["Does Vault send data anywhere?", "No. This prototype stores its demo state in this browser's localStorage."], ["Is the ledger blockchain?", "No. It is a local SHA-256 hash chain designed to make retained changes visible."], ["Can I use this as a validated medical monitor?", "No. The browser simulation and DHT22 prototype are not medically validated."], ["What does the chart remember?", "The chart window is live for the current session; shipment and ledger records persist locally."]].map(([q, a]) => <div key={q} className="py-3.5"><h4 className="text-[13px] font-semibold text-ink">{q}</h4><p className="mt-1 text-[12.5px] leading-relaxed text-ink-muted">{a}</p></div>)}</div>
+                <div className="mt-4 divide-y divide-line rounded-lg border border-line bg-raised px-4 shadow-e1">{[["Does Vault send data anywhere?", "In hardware mode, the ESP32 sends readings to the local Vault API running on this computer. The browser reads that API to render the console."], ["Is the ledger blockchain?", "No. It is a SHA-256 hash chain designed to make retained changes visible."], ["Can I use this as a validated medical monitor?", "No. The DHT22 prototype and this local software are not medically validated."], ["What does the chart remember?", "Monitor shows the latest 30 device readings. The API retains the uploaded readings and backend ledger events."]].map(([q, a]) => <div key={q} className="py-3.5"><h4 className="text-[13px] font-semibold text-ink">{q}</h4><p className="mt-1 text-[12.5px] leading-relaxed text-ink-muted">{a}</p></div>)}</div>
               </section>
             </div>
           </div>
@@ -417,14 +417,9 @@ function Header({ isDark, onToggleTheme }: { isDark: boolean; onToggleTheme: () 
               <Package size={17} strokeWidth={2} aria-hidden="true" />
             </span>
             <span className="min-w-0 leading-none">
-              <span className="flex items-center gap-2">
-                <span className="text-[15px] font-semibold tracking-[-0.01em] text-ink">Vault</span>
-                <span className="hidden rounded border border-line px-1.5 py-px text-[10px] font-semibold uppercase tracking-[0.06em] text-ink-subtle xl:inline">
-                  Prototype
-                </span>
-              </span>
-              <span className="mt-1 block truncate font-mono text-[11px] text-ink-subtle">
-                Cold-chain 01
+              <span className="text-[15px] font-semibold tracking-[-0.01em] text-ink">Vault</span>
+              <span className="mt-1 block truncate text-[11px] tracking-[0.02em] text-ink-subtle">
+                Live cold-chain telemetry
               </span>
             </span>
           </Link>
