@@ -119,116 +119,143 @@ function ChainDiagram() {
   const blocks = [0, 1, 2];
   const blockWidth = 168;
   const gap = 64;
-  const chipWidth = 62;
-  const chipY = 62;
-  const chipHeight = 19;
+  const cardY = 16;
+  const cardHeight = 72;
+  const inset = 10;
+  const chipWidth = 66;
+  const chipHeight = 20;
+  // Chips are inset from the card's bottom edge by the same amount as from its
+  // sides. They were three pixels off the bottom against a ten pixel side
+  // margin, which read as a rendering accident rather than a layout.
+  const chipY = cardY + cardHeight - inset - chipHeight;
   const wireY = chipY + chipHeight / 2;
+  const arrow = 7;
   const width = blocks.length * blockWidth + (blocks.length - 1) * gap;
 
   return (
-    <svg
-      viewBox={`0 0 ${width} 118`}
-      className="mx-auto h-auto w-full max-w-[700px]"
-      role="img"
-      aria-label="Three ledger entries in a chain. Each entry's digest is carried as the next entry's previous-hash field, so editing one entry breaks every entry after it."
-    >
-      {blocks.map((index) => {
-        const x = index * (blockWidth + gap);
-        const edited = index === 1;
-        const digestX = x + blockWidth - chipWidth - 10;
-        return (
-          <g key={index}>
-            <rect
-              x={x}
-              y={16}
-              width={blockWidth}
-              height={68}
-              rx={9}
-              className={edited ? "fill-raised stroke-warning-line" : "fill-raised stroke-line"}
-              strokeWidth={1}
-            />
-            <text x={x + 12} y={36} className="fill-ink-subtle font-mono text-[9.5px]">
-              #{index + 1}
-            </text>
-            <text x={x + 12} y={52} className="fill-ink text-[11.5px] font-medium">
-              contents
-            </text>
-
-            {/* prev on the left edge, digest on the right: the wire between
-                them is then literally the thing being carried forward. */}
-            <rect
-              x={x + 10}
-              y={chipY}
-              width={chipWidth}
-              height={chipHeight}
-              rx={4}
-              className="fill-sunken stroke-line"
-              strokeWidth={1}
-            />
-            <text x={x + 19} y={chipY + 13} className="fill-ink-muted font-mono text-[9px]">
-              {index === 0 ? "prev 000…" : "prev"}
-            </text>
-
-            <rect
-              x={digestX}
-              y={chipY}
-              width={chipWidth}
-              height={chipHeight}
-              rx={4}
-              className={
-                edited ? "fill-warning-soft stroke-warning-line" : "fill-sunken stroke-line"
-              }
-              strokeWidth={1}
-            />
-            <text
-              x={digestX + 12}
-              y={chipY + 13}
-              className={`font-mono text-[9px] ${edited ? "fill-warning" : "fill-ink-muted"}`}
-            >
-              digest
-            </text>
-
-            {edited && (
-              <text
-                x={x + blockWidth / 2}
-                y={104}
-                textAnchor="middle"
-                className="fill-warning text-[10px] font-medium"
-              >
-                edit here…
+    // The diagram owns its own scroll container. Its min-width is a property
+    // of the drawing -- below it the 9px chip labels stop being legible -- so
+    // the thing that keeps that from pushing the page sideways belongs here
+    // too, rather than depending on every caller to wrap it.
+    <div className="overflow-x-auto">
+      <svg
+        viewBox={`0 0 ${width} 118`}
+        className="h-auto w-full min-w-[560px]"
+        role="img"
+        aria-label="Three ledger entries in a chain. Each entry's digest is carried as the next entry's previous-hash field, so editing one entry breaks every entry after it."
+      >
+        {blocks.map((index) => {
+          const x = index * (blockWidth + gap);
+          const edited = index === 1;
+          const prevX = x + inset;
+          const digestX = x + blockWidth - chipWidth - inset;
+          return (
+            <g key={index}>
+              <rect
+                x={x}
+                y={cardY}
+                width={blockWidth}
+                height={cardHeight}
+                rx={9}
+                className={edited ? "fill-raised stroke-warning-line" : "fill-raised stroke-line"}
+                strokeWidth={1}
+              />
+              <text x={x + inset + 2} y={cardY + 18} className="fill-ink-subtle font-mono text-[9.5px]">
+                #{index + 1}
               </text>
-            )}
-            {index === 2 && (
-              <text
-                x={x + blockWidth / 2}
-                y={104}
-                textAnchor="middle"
-                className="fill-warning text-[10px] font-medium"
-              >
-                …and this no longer matches
+              <text x={x + inset + 2} y={cardY + 36} className="fill-ink text-[11.5px] font-medium">
+                contents
               </text>
-            )}
 
-            {index < blocks.length - 1 && (
-              <>
-                <line
-                  x1={digestX + chipWidth}
-                  y1={wireY}
-                  x2={x + blockWidth + gap + 8}
-                  y2={wireY}
-                  className={index === 1 ? "stroke-warning" : "stroke-line-strong"}
-                  strokeWidth={1.25}
-                />
-                <path
-                  d={`M${x + blockWidth + gap + 3} ${wireY - 3.5} L${x + blockWidth + gap + 9} ${wireY} L${x + blockWidth + gap + 3} ${wireY + 3.5} Z`}
-                  className={index === 1 ? "fill-warning" : "fill-line-strong"}
-                />
-              </>
-            )}
-          </g>
-        );
-      })}
-    </svg>
+              {/* prev on the left edge, digest on the right: the wire between
+                  them is then literally the thing being carried forward. */}
+              <rect
+                x={prevX}
+                y={chipY}
+                width={chipWidth}
+                height={chipHeight}
+                rx={4}
+                className="fill-sunken stroke-line"
+                strokeWidth={1}
+              />
+              <text
+                x={prevX + chipWidth / 2}
+                y={chipY + 13.5}
+                textAnchor="middle"
+                className="fill-ink-muted font-mono text-[9px]"
+              >
+                {index === 0 ? "prev 000…" : "prev"}
+              </text>
+
+              <rect
+                x={digestX}
+                y={chipY}
+                width={chipWidth}
+                height={chipHeight}
+                rx={4}
+                className={
+                  edited ? "fill-warning-soft stroke-warning-line" : "fill-sunken stroke-line"
+                }
+                strokeWidth={1}
+              />
+              {/* Both chip labels are centred. They were inset by different
+                  amounts, so `prev` hugged its box while `digest` floated. */}
+              <text
+                x={digestX + chipWidth / 2}
+                y={chipY + 13.5}
+                textAnchor="middle"
+                className={`font-mono text-[9px] ${edited ? "fill-warning" : "fill-ink-muted"}`}
+              >
+                digest
+              </text>
+
+              {edited && (
+                <text
+                  x={x + blockWidth / 2}
+                  y={106}
+                  textAnchor="middle"
+                  className="fill-warning text-[10px] font-medium"
+                >
+                  edit here…
+                </text>
+              )}
+              {index === 2 && (
+                <text
+                  x={x + blockWidth / 2}
+                  y={106}
+                  textAnchor="middle"
+                  className="fill-warning text-[10px] font-medium"
+                >
+                  …and this no longer matches
+                </text>
+              )}
+
+              {/* The wire runs from this entry's digest chip to the next entry's
+                  prev chip, and stops on it rather than on the card's border.
+                  Ending at the border drew a line between two boxes; the claim
+                  the picture has to make is narrower than that -- it is this
+                  field that becomes that field. */}
+              {index < blocks.length - 1 && (
+                <>
+                  <line
+                    x1={digestX + chipWidth}
+                    y1={wireY}
+                    x2={x + blockWidth + gap + inset - arrow}
+                    y2={wireY}
+                    className={edited ? "stroke-warning" : "stroke-line-strong"}
+                    strokeWidth={1.25}
+                  />
+                  <path
+                    d={`M${x + blockWidth + gap + inset - arrow} ${wireY - 4} L${x + blockWidth + gap + inset} ${wireY} L${x + blockWidth + gap + inset - arrow} ${wireY + 4} Z`}
+                    className={edited ? "fill-warning" : "fill-line-strong"}
+                  />
+                </>
+              )}
+            </g>
+          );
+        })}
+      </svg>
+    </div>
   );
 }
 
