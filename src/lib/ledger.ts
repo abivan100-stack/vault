@@ -147,6 +147,54 @@ export function formatEventLabel(event: string): string {
 }
 
 /**
+ * Human labels for the events, for surfaces that show the payload alongside.
+ *
+ * `TEMPERATURE READING` beside a detail reading `4.4 °C` states the same fact
+ * twice and, at the width of a table column, states it loudly. These are the
+ * same events said once. Exhaustive by construction: a new event type fails
+ * to compile here rather than falling back to a shouted constant name.
+ */
+const SHORT_EVENT_LABELS: Record<LedgerEventType, string> = {
+  SHIPMENT_CREATE: "Opened",
+  SHIPMENT_UPDATE: "Updated",
+  TEMPERATURE_READING: "Reading",
+  EXCURSION_OPEN: "Excursion",
+  EXCURSION_CLEAR: "Recovered",
+  HANDOFF_INIT: "Handoff",
+  INVESTIGATION_OPEN: "Investigation",
+  INVESTIGATION_RESOLVED: "Resolved",
+};
+
+export function shortEventLabel(event: LedgerEventType): string {
+  return SHORT_EVENT_LABELS[event];
+}
+
+/**
+ * The temperature an entry records, or null when it carries none.
+ *
+ * Reading and excursion details are written as `4.4 °C` / `8.2 °C — left safe
+ * corridor`, so the value is recoverable from the front of the detail. This
+ * parses a string written one function away, which is only acceptable because
+ * the alternative — a second, unhashed store of readings — would be a source
+ * of truth competing with the chain. An unparseable detail yields null rather
+ * than a number, so a hand-edited entry can never be presented as a
+ * measurement.
+ */
+export function readingCelsius(entry: LedgerEntry): number | null {
+  if (
+    entry.event !== "TEMPERATURE_READING" &&
+    entry.event !== "EXCURSION_OPEN" &&
+    entry.event !== "EXCURSION_CLEAR"
+  ) {
+    return null;
+  }
+  const match = entry.detail.match(/^(-?\d+(?:\.\d+)?)\s*°C/);
+  if (!match) return null;
+  const value = Number(match[1]);
+  return Number.isFinite(value) ? value : null;
+}
+
+/**
  * Reason chosen when resolving an Investigation. Structured rather than
  * freeform so investigations stay queryable (e.g. "how many were sensor
  * faults vs confirmed loss"), paired with a required freeform note.
@@ -212,6 +260,38 @@ export function coveredExcursionSequences(
   return chain
     .filter((entry) => entry.event === "EXCURSION_OPEN" && entry.sequence >= sinceSequence)
     .map((entry) => entry.sequence);
+}
+
+/** Shortest prefix treated as a digest lookup rather than a text search. */
+export const MIN_DIGEST_QUERY_LENGTH = 8;
+
+/**
+ * Whether a search term is someone pasting a digest.
+ *
+ * Hex and long enough to be a digest prefix rather than a word. Eight
+ * characters is the length the UI itself shows in a shortened hash, so
+ * anything copied out of the app and pasted back is recognised.
+ */
+export function isDigestQuery(query: string): boolean {
+  const trimmed = query.trim().toLowerCase();
+  return trimmed.length >= MIN_DIGEST_QUERY_LENGTH && /^[0-9a-f]+$/.test(trimmed);
+}
+
+/**
+ * The entry whose digest starts with `query`, or null.
+ *
+ * A miss is a genuinely ambiguous result and the caller has to say so
+ * carefully: the digest may never have existed, or it may have belonged to an
+ * entry that has since slid out of the retained window. This function cannot
+ * tell those apart, and neither can anything else here.
+ */
+export function findByDigest(
+  chain: readonly LedgerEntry[],
+  query: string,
+): LedgerEntry | null {
+  const trimmed = query.trim().toLowerCase();
+  if (!isDigestQuery(trimmed)) return null;
+  return chain.find((entry) => entry.hash.startsWith(trimmed)) ?? null;
 }
 
 export function isLedgerEventType(value: unknown): value is LedgerEventType {

@@ -1,7 +1,9 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowLeft, Check, Copy, Pencil, Plus, RotateCcw, Truck } from "lucide-react";
+import { ArrowLeft, Check, Copy, FileText, Pencil, Plus, RotateCcw, Truck } from "lucide-react";
 import { useColdChain } from "@/context/ColdChainContext";
+import { useReportExport } from "@/hooks/useReportExport";
+import { useCapability } from "@/hooks/useCapability";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -35,6 +37,11 @@ export default function ShipmentManagePage() {
     useColdChain();
   const navigate = useNavigate();
   const { toast, showToast } = useToast();
+  const exportReport = useReportExport();
+  // Every mutation on this page is an append to the organisation's ledger,
+  // so one check covers them all. With no organisation, this is always
+  // allowed — see useCapability.
+  const editing = useCapability("editShipment");
 
   const [editOpen, setEditOpen] = useState(false);
   const [draft, setDraft] = useState<FieldLogMeta>(fieldLogMeta);
@@ -50,6 +57,20 @@ export default function ShipmentManagePage() {
   const isHandedOff = fieldLogMeta.handedOffAt !== null;
 
   const handleSave = () => {
+    // Re-checked here, not only on the button. A dialog can be open while the
+    // active organisation or the role in it changes, and the control that
+    // opened it is no longer the thing deciding.
+    if (!editing.allowed) {
+      showToast(editing.reason ?? "You cannot change this shipment.", "error");
+      return;
+    }
+    if (isHandedOff) {
+      // A closed shipment's record is what its report describes. Editing it
+      // afterwards would pair the new box, product or route with a ledger
+      // that ended before the change.
+      showToast("This shipment has been handed off and its record is closed.", "error");
+      return;
+    }
     const validation = validateFieldLog(draft);
     if (!validation.ok) {
       showToast(validation.message, "error");
@@ -58,6 +79,11 @@ export default function ShipmentManagePage() {
     updateFieldLog(draft);
     setEditOpen(false);
     showToast("Shipment updated and recorded on the ledger");
+  };
+
+  const handleExportReport = () => {
+    exportReport();
+    showToast("Report generated from the current ledger");
   };
 
   const handleCopy = async () => {
@@ -110,8 +136,23 @@ export default function ShipmentManagePage() {
           </StatusPill>
         </CardHeader>
 
+        {editing.reason && (
+          <CardContent className="border-b border-line py-3">
+            <p className="text-[13px] text-ink-muted">{editing.reason}</p>
+          </CardContent>
+        )}
+
         <CardContent className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
-          <Button onClick={openEditor} className="h-9 gap-2 text-sm">
+          <Button
+            onClick={openEditor}
+            disabled={isHandedOff || !editing.allowed}
+            title={
+              isHandedOff
+                ? "This shipment has been handed off and its record is closed."
+                : (editing.reason ?? undefined)
+            }
+            className="h-9 gap-2 text-sm"
+          >
             <Pencil size={15} aria-hidden="true" />
             Edit details
           </Button>
@@ -122,13 +163,20 @@ export default function ShipmentManagePage() {
           <Button
             variant="outline"
             onClick={() => setConfirm("handoff")}
-            disabled={isHandedOff}
+            disabled={isHandedOff || !editing.allowed}
+            title={editing.reason ?? undefined}
             className="h-9 gap-2 text-sm"
           >
             <Truck size={15} aria-hidden="true" />
             {isHandedOff ? "Handed off" : "Record handoff"}
           </Button>
-          <Button variant="outline" onClick={() => setConfirm("reset")} className="h-9 gap-2 text-sm">
+          <Button
+            variant="outline"
+            onClick={() => setConfirm("reset")}
+            disabled={!editing.allowed}
+            title={editing.reason ?? undefined}
+            className="h-9 gap-2 text-sm"
+          >
             <RotateCcw size={15} aria-hidden="true" />
             Reset fields
           </Button>
@@ -138,6 +186,8 @@ export default function ShipmentManagePage() {
           <Button
             variant="secondary"
             onClick={() => setConfirm("new")}
+            disabled={!editing.allowed}
+            title={editing.reason ?? undefined}
             className="h-9 w-full gap-2 text-sm"
           >
             <Plus size={15} aria-hidden="true" />
@@ -161,6 +211,41 @@ export default function ShipmentManagePage() {
             </p>
           </CardFooter>
         )}
+      </Card>
+
+      {/* The closing report is the artefact a shipment exists to produce, so
+          it gets its own block rather than a fifth button in the grid above.
+          It stays available mid-transit — the ledger is append-only and a
+          report taken early is simply a report of a shipment still running,
+          which the document says on its face. */}
+      <Card render={<section />} className="p-5">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+          <span
+            className={`grid h-9 w-9 shrink-0 place-items-center rounded-lg ${
+              isHandedOff ? "bg-brand-soft text-brand-ink" : "bg-sunken text-ink-subtle"
+            }`}
+          >
+            <FileText size={17} aria-hidden="true" />
+          </span>
+          <div className="min-w-0 flex-1">
+            <CardTitle>Closing report</CardTitle>
+            <p className="mt-1 max-w-[62ch] text-[13px] leading-relaxed text-ink-muted">
+              {isHandedOff
+                ? `Handed off ${formatIsoDate(fieldLogMeta.handedOffAt!)} at ${formatClock(
+                    fieldLogMeta.handedOffAt!,
+                  )}. The report carries the shipment record, the corridor summary, every investigation, and this shipment's entries with their digests -- which is the ledger from its start unless earlier entries have aged out.`
+                : "Still in transit. A report exported now covers everything on the ledger so far, and says on its face that the shipment had not closed."}
+            </p>
+          </div>
+          <Button
+            variant={isHandedOff ? "default" : "outline"}
+            onClick={handleExportReport}
+            className="h-9 shrink-0 gap-2 text-sm"
+          >
+            <FileText size={15} aria-hidden="true" />
+            Export PDF
+          </Button>
+        </div>
       </Card>
 
       <Card render={<section />} surface="sunken" className="p-5">
@@ -240,6 +325,10 @@ export default function ShipmentManagePage() {
         confirmLabel="Reset fields"
         destructive
         onConfirm={() => {
+          if (!editing.allowed) {
+            showToast(editing.reason ?? "You cannot change this shipment.", "error");
+            return;
+          }
           resetFieldLog();
           showToast("Shipment reset to defaults");
         }}
@@ -253,6 +342,10 @@ export default function ShipmentManagePage() {
         confirmLabel="Start new shipment"
         destructive
         onConfirm={() => {
+          if (!editing.allowed) {
+            showToast(editing.reason ?? "You cannot open a shipment.", "error");
+            return;
+          }
           createNewShipment();
           showToast("New shipment opened");
         }}
@@ -265,8 +358,12 @@ export default function ShipmentManagePage() {
         description={`This writes a permanent handoff entry for ${fieldLogMeta.route} to the ledger. It cannot be undone.`}
         confirmLabel="Record handoff"
         onConfirm={() => {
+          if (!editing.allowed) {
+            showToast(editing.reason ?? "You cannot record a handoff.", "error");
+            return;
+          }
           recordHandoff();
-          showToast("Handoff recorded on the ledger");
+          showToast("Handoff recorded — the closing report is ready to export");
         }}
       />
     </div>
