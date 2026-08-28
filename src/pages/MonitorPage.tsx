@@ -181,8 +181,8 @@ export default function MonitorPage() {
 
           {outOfCorridor && (
             <div className="mt-5 rounded-lg border border-warning-line bg-warning-soft p-3.5">
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div>
+              <div className="flex flex-col gap-3">
+                <div className="min-w-0">
                   <p className="text-[13px] font-medium text-ink">Hardware alarm active</p>
                   <p className="mt-0.5 text-[12px] leading-relaxed text-ink-muted">
                     {acknowledgementConfirmed
@@ -195,6 +195,7 @@ export default function MonitorPage() {
                 <Button
                   type="button"
                   variant={acknowledgementConfirmed ? "outline" : "default"}
+                  className="w-full justify-center"
                   onClick={() => void acknowledgeAlarm().catch(() => undefined)}
                   disabled={acknowledgementPending || acknowledgementConfirmed}
                   aria-label="Acknowledge active hardware alarm"
