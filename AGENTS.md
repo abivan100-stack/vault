@@ -123,15 +123,18 @@ Injected randomness (`nextTemperature(previous, drift)`,
 
 ### Issue tracker
 
-Issues live as GitHub issues on `abivan100-stack/vault`, driven through the `gh` CLI. See `docs/agents/issue-tracker.md`.
+Issues live as GitHub issues on `abivan100-stack/vault`, driven through the
+`gh` CLI. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 
-The five canonical triage roles, each label string equal to its name. See `docs/agents/triage-labels.md`.
+The five canonical triage roles, each label string equal to its name. See
+`docs/agents/triage-labels.md`.
 
 ### Domain docs
 
-Single-context - one `CONTEXT.md` and one `docs/adr/` at the repo root. See `docs/agents/domain.md`.
+Single-context — one `CONTEXT.md` and one `docs/adr/` at the repo root. See
+`docs/agents/domain.md`.
 
 ## Gotchas
 

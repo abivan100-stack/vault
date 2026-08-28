@@ -5,6 +5,8 @@ import {
   ClipboardList,
   Copy,
   Download,
+  Link2,
+  CircleDot,
   Search,
   ShieldAlert,
   ShieldCheck,
@@ -39,11 +41,6 @@ import {
   type LedgerEventType,
   type ResolutionReason,
 } from "@/lib/ledger";
-import {
-  SEGMENT_INDICATOR,
-  SEGMENT_MOVES,
-  useSegmentedIndicator,
-} from "@/hooks/useSegmentedIndicator";
 import { shortHash } from "@/lib/hash";
 import { formatClock, formatIsoDate } from "@/lib/simulation";
 import { downloadCsv, toCsv } from "@/lib/csv";
@@ -81,6 +78,24 @@ function eventTone(
   return "neutral";
 }
 
+function eventShortLabel(event: LedgerEventType): string {
+  switch (event) {
+    case "TEMPERATURE_READING": return "Reading";
+    case "EXCURSION_OPEN": return "Excursion opened";
+    case "EXCURSION_CLEAR": return "Excursion cleared";
+    case "INVESTIGATION_OPEN": return "Investigation opened";
+    case "INVESTIGATION_RESOLVED": return "Investigation resolved";
+    case "SHIPMENT_CREATE": return "Shipment created";
+    case "SHIPMENT_UPDATE": return "Shipment updated";
+    case "HANDOFF_INIT": return "Handoff recorded";
+  }
+}
+
+function readingValue(entry: LedgerEntry): string | null {
+  if (entry.event !== "TEMPERATURE_READING") return null;
+  return entry.detail.match(/-?\d+(?:\.\d+)?\s*°C/i)?.[0] ?? entry.detail;
+}
+
 function HashButton({
   hash,
   copiedHash,
@@ -113,14 +128,15 @@ export default function LedgerPage() {
   const { ledger, chainVerification, discardedEntryCount, investigation, resolveInvestigation } =
     useColdChain();
   const [query, setQuery] = useState("");
+  const [hashQuery, setHashQuery] = useState("");
   const [filter, setFilter] = useState<FilterKey>("all");
-  const filterSegmentsRef = useRef<HTMLDivElement>(null);
-  const filterSegments = useSegmentedIndicator(filterSegmentsRef, filter);
   const [copiedHash, setCopiedHash] = useState<string | null>(null);
   const [fullOpen, setFullOpen] = useState(false);
   const [resolveOpen, setResolveOpen] = useState(false);
   const [resolveReason, setResolveReason] = useState<ResolutionReason | "">("");
   const [resolveNote, setResolveNote] = useState("");
+  const [backendCount, setBackendCount] = useState<number | null>(null);
+  const [backendLatest, setBackendLatest] = useState<string | null>(null);
   const copyTimerRef = useRef<number | null>(null);
 
   useEffect(
@@ -129,6 +145,26 @@ export default function LedgerPage() {
     },
     [],
   );
+
+  useEffect(() => {
+    let cancelled = false;
+    const syncBackendLedger = async () => {
+      try {
+        const response = await fetch("http://127.0.0.1:8787/api/ledger?shipmentId=TEST-01");
+        if (!response.ok) return;
+        const payload = (await response.json()) as { entries?: Array<{ event: string }> };
+        if (!cancelled && payload.entries) {
+          setBackendCount(payload.entries.length);
+          setBackendLatest(payload.entries.at(-1)?.event || null);
+        }
+      } catch {
+        if (!cancelled) setBackendCount(null);
+      }
+    };
+    void syncBackendLedger();
+    const interval = window.setInterval(() => void syncBackendLedger(), 5000);
+    return () => { cancelled = true; window.clearInterval(interval); };
+  }, []);
 
   const newestFirst = useMemo(() => [...ledger].reverse(), [ledger]);
 
@@ -178,6 +214,11 @@ export default function LedgerPage() {
 
   const rows: LedgerEntry[] = filtered.slice(0, 12);
   const isTrustworthy = chainVerification.intact && discardedEntryCount === 0;
+  const hashLookup = useMemo(() => {
+    const value = hashQuery.trim().toLowerCase();
+    if (!value) return null;
+    return ledger.find((entry) => entry.hash.toLowerCase() === value) ?? false;
+  }, [hashQuery, ledger]);
 
   const coveredExcursions = investigation.openEntry
     ? coveredExcursionSequences(ledger, investigation.openEntry.sequence - 1)
@@ -210,6 +251,13 @@ export default function LedgerPage() {
           Export CSV
         </Button>
       </header>
+
+      {backendCount !== null && (
+        <div className="flex items-center justify-between rounded-lg border border-brand-line bg-brand-soft/40 px-3.5 py-2.5 text-[13px] text-ink-muted">
+          <span>Backend ledger connected · {backendCount} device {backendCount === 1 ? "entry" : "entries"}</span>
+          <span className="font-mono text-[11px] text-ink-subtle">latest: {backendLatest || "—"}</span>
+        </div>
+      )}
 
       {/* Chain verification — recomputed from the stored entries, not asserted.
           Entries that were unreadable on load count against integrity too: a
@@ -298,25 +346,17 @@ export default function LedgerPage() {
         </div>
 
         <div className="max-w-full overflow-x-auto rounded-lg border border-line bg-sunken p-0.5">
-          {/* The row scrolls once the filters overflow, so the indicator is
-              measured against the row rather than the clipping container —
-              against the container it would drift as soon as you scrolled. */}
-          <div ref={filterSegmentsRef} className="relative flex h-8 w-max items-center gap-0.5">
-            <span
-              aria-hidden="true"
-              className={`${SEGMENT_INDICATOR} ${filterSegments.moves ? SEGMENT_MOVES : ""}`}
-              style={filterSegments.indicatorStyle}
-            />
+          <div className="flex h-8 w-max items-center gap-0.5">
             {FILTERS.map((entry) => (
               <button
                 key={entry.key}
                 type="button"
-                data-segment={entry.key}
                 onClick={() => setFilter(entry.key)}
                 aria-pressed={filter === entry.key}
-                // The active pill is the sliding indicator behind this button.
-                className={`relative z-10 h-8 shrink-0 whitespace-nowrap rounded-md px-3 text-[13px] font-medium transition-colors ${
-                  filter === entry.key ? "text-ink" : "text-ink-muted hover:text-ink"
+                className={`h-8 shrink-0 whitespace-nowrap rounded-md px-3 text-[13px] font-medium transition-colors ${
+                  filter === entry.key
+                    ? "bg-raised text-ink ring-1 ring-line"
+                    : "text-ink-muted hover:text-ink"
                 }`}
               >
                 {entry.label}
@@ -326,51 +366,46 @@ export default function LedgerPage() {
         </div>
       </div>
 
-      <Card className="overflow-hidden">
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader className="bg-sunken">
-              <TableRow className="hover:bg-transparent">
-                <TableHead className="w-[72px] text-[12px] font-semibold text-ink-muted">Seq</TableHead>
-                <TableHead className="w-[190px] text-[12px] font-semibold text-ink-muted">Event</TableHead>
-                <TableHead className="text-[12px] font-semibold text-ink-muted">Detail</TableHead>
-                <TableHead className="w-[150px] text-[12px] font-semibold text-ink-muted">Recorded</TableHead>
-                <TableHead className="w-[150px] text-right text-[12px] font-semibold text-ink-muted">
-                  Hash
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {rows.length === 0 ? (
-                <TableRow>
-                  <TableCell colSpan={5} className="py-12 text-center text-[13px] text-ink-muted">
-                    {query.trim() ? `No entries match “${query.trim()}”.` : "No entries yet."}
-                  </TableCell>
-                </TableRow>
-              ) : (
-                rows.map((entry) => (
-                  <TableRow key={entry.hash} className="border-line">
-                    <TableCell className="tabular py-3 font-mono text-[12.5px] font-medium text-ink-subtle">
-                      {String(entry.sequence).padStart(3, "0")}
-                    </TableCell>
-                    <TableCell className="py-3">
-                      <StatusPill tone={eventTone(entry.event)}>
-                        {formatEventLabel(entry.event)}
-                      </StatusPill>
-                    </TableCell>
-                    <TableCell className="py-3 text-[13.5px] text-ink">{entry.detail}</TableCell>
-                    <TableCell className="tabular py-3 font-mono text-[12.5px] text-ink-muted">
-                      {formatIsoDate(entry.at)} {formatClock(entry.at)}
-                    </TableCell>
-                    <TableCell className="py-3 text-right">
-                      <HashButton hash={entry.hash} copiedHash={copiedHash} onCopy={handleCopy} />
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
+      <Card render={<section />} className="border-brand-line bg-brand-soft/45 p-4 sm:p-5">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div><p className="text-[13.5px] font-semibold text-ink">Find a retained entry</p><p className="mt-1 text-[12.5px] text-ink-muted">Paste a full SHA-256 hash to locate its event and predecessor link.</p></div>
+          <div className="flex w-full max-w-[470px] gap-2"><Input value={hashQuery} onChange={(event) => setHashQuery(event.target.value)} placeholder="Paste entry hash…" aria-label="Find an entry by full hash" className="h-9 bg-raised font-mono text-[12px]" /><Button variant="outline" onClick={() => setHashQuery("")} disabled={!hashQuery} className="h-9 shrink-0 text-sm">Clear</Button></div>
         </div>
+        {hashLookup && typeof hashLookup !== "boolean" && <div className="mt-4 grid gap-3 rounded-lg border border-brand-line bg-raised p-3.5 sm:grid-cols-[auto_1fr_auto] sm:items-center"><span className="grid h-8 w-8 place-items-center rounded-full bg-success-soft text-success"><ShieldCheck size={15} aria-hidden="true" /></span><div className="min-w-0"><p className="text-[13px] font-medium text-ink">Entry #{hashLookup.sequence} · {formatEventLabel(hashLookup.event)}</p><p className="mt-1 truncate text-[12.5px] text-ink-muted">{hashLookup.detail} · {formatIsoDate(hashLookup.at)} {formatClock(hashLookup.at)}</p></div><HashButton hash={hashLookup.hash} copiedHash={copiedHash} onCopy={handleCopy} /></div>}
+        {hashLookup === false && <p className="mt-3 rounded-lg border border-warning-line bg-warning-soft px-3 py-2.5 text-[12.5px] text-warning">No retained entry matches that hash. Check the full value or whether the entry has aged out of the local window.</p>}
+      </Card>
+
+      <Card className="overflow-hidden">
+        <div className="flex items-center justify-between border-b border-line bg-sunken/60 px-4 py-3 sm:px-5">
+          <div><p className="text-[13.5px] font-semibold text-ink">Chain, in sequence</p><p className="mt-0.5 text-[12px] text-ink-muted">Newest evidence first · each row links to the next digest</p></div>
+          <span className="hidden rounded-md border border-line bg-raised px-2 py-1 font-mono text-[10px] text-ink-subtle sm:inline-flex">{rows.length.toString().padStart(2, "0")} shown</span>
+        </div>
+        {rows.length === 0 ? (
+          <div className="py-14 text-center text-[13px] text-ink-muted">{query.trim() ? `No entries match “${query.trim()}”.` : "No entries yet."}</div>
+        ) : (
+          <ol className="divide-y divide-line">
+            {rows.map((entry, index) => {
+              const temp = readingValue(entry);
+              const isLast = index === rows.length - 1;
+              return (
+                <li key={entry.hash} className="grid grid-cols-[40px_minmax(0,1fr)] gap-3 px-4 py-4 sm:grid-cols-[56px_minmax(0,1fr)_150px_122px] sm:gap-4 sm:px-5">
+                  <div className="relative flex justify-center">
+                    {!isLast && <span className="absolute left-1/2 top-7 h-[calc(100%+1rem)] w-px -translate-x-1/2 bg-line" aria-hidden="true" />}
+                    <span className={`relative z-10 grid h-7 w-7 place-items-center rounded-full border ${entry.event === "TEMPERATURE_READING" ? "border-line bg-raised text-ink-subtle" : eventTone(entry.event) === "warning" ? "border-warning-line bg-warning-soft text-warning" : "border-brand-line bg-brand-soft text-brand"}`}><CircleDot size={13} aria-hidden="true" /></span>
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-center gap-2"><StatusPill tone={eventTone(entry.event)}>{eventShortLabel(entry.event)}</StatusPill><span className="font-mono text-[11px] text-ink-subtle">#{String(entry.sequence).padStart(3, "0")}</span></div>
+                    <p className="mt-2 text-[13.5px] leading-snug text-ink">{temp ? "Corridor reading captured" : entry.detail}</p>
+                    {temp && <p className="mt-0.5 text-[12px] text-ink-muted">{entry.detail}</p>}
+                    <div className="mt-2 flex items-center gap-1.5 font-mono text-[11px] text-ink-subtle"><span>{formatIsoDate(entry.at)}</span><span aria-hidden="true">·</span><span>{formatClock(entry.at)}</span></div>
+                  </div>
+                  <div className="hidden items-center sm:flex"><div className="w-full rounded-lg border border-line bg-sunken/60 px-3 py-2"><p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ink-subtle">{temp ? "Temperature" : "Event context"}</p><p className="mt-1 truncate font-mono text-[12.5px] text-ink">{temp ?? entry.detail}</p></div></div>
+                  <div className="hidden items-center justify-end sm:flex"><div className="flex flex-col items-end gap-1"><span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ink-subtle">Digest</span><HashButton hash={entry.hash} copiedHash={copiedHash} onCopy={handleCopy} /><span className="inline-flex items-center gap-1 text-[10px] text-ink-subtle"><Link2 size={11} aria-hidden="true" /> prev linked</span></div></div>
+                </li>
+              );
+            })}
+          </ol>
+        )}
       </Card>
 
       <div className="flex flex-wrap items-center justify-between gap-2 text-[12.5px] text-ink-subtle">

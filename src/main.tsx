@@ -8,6 +8,7 @@ import LedgerPage from "./pages/LedgerPage";
 import MonitorPage from "./pages/MonitorPage";
 import ShipmentManagePage from "./pages/ShipmentManagePage";
 import ShipmentPage from "./pages/ShipmentPage";
+import AccountPage from "./pages/AccountPage";
 import "./styles.css";
 
 const rootElement = document.getElementById("root");
@@ -26,6 +27,7 @@ createRoot(rootElement).render(
             <Route path="ledger" element={<LedgerPage />} />
             <Route path="shipment" element={<ShipmentPage />} />
             <Route path="shipment/manage" element={<ShipmentManagePage />} />
+            <Route path="account" element={<AccountPage />} />
             <Route path="*" element={<Navigate to="/shipment" replace />} />
           </Route>
         </Routes>

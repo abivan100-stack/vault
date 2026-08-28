@@ -33,6 +33,12 @@ export default tseslint.config(
     rules: { "react-refresh/only-export-components": "off" },
   },
   {
+    files: ["server/**/*.mjs"],
+    languageOptions: {
+      globals: { AbortSignal: "readonly", Buffer: "readonly", console: "readonly", fetch: "readonly", process: "readonly", URL: "readonly" },
+    },
+  },
+  {
     files: ["**/*.test.ts", "**/*.test.tsx"],
     rules: { "no-console": "off" },
   },
