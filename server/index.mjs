@@ -117,8 +117,8 @@ function ensureShipment(shipmentId) {
   appendLedger(shipmentId, "SHIPMENT_CREATE", "Created by device ingestion", now);
 }
 
-function updateAlarmState(shipmentId, deviceId, status, recordedAt) {
-  const existing = db.prepare("SELECT active FROM device_alarm_state WHERE shipment_id = ? AND device_id = ?").get(shipmentId, deviceId);
+function updateAlarmState(shipmentId, deviceId, status, recordedAt, deviceAcknowledged) {
+  const existing = db.prepare("SELECT active, acknowledgement_state FROM device_alarm_state WHERE shipment_id = ? AND device_id = ?").get(shipmentId, deviceId);
   if (status === "SAFE") {
     if (existing) {
       db.prepare("UPDATE device_alarm_state SET active = 0, acknowledgement_state = 'NONE', requested_at = NULL, acknowledged_at = NULL, updated_at = ? WHERE shipment_id = ? AND device_id = ?").run(recordedAt, shipmentId, deviceId);
@@ -126,15 +126,32 @@ function updateAlarmState(shipmentId, deviceId, status, recordedAt) {
     return;
   }
   if (existing?.active) {
-    db.prepare("UPDATE device_alarm_state SET updated_at = ? WHERE shipment_id = ? AND device_id = ?").run(recordedAt, shipmentId, deviceId);
+    if (deviceAcknowledged === false && existing.acknowledgement_state !== "UNACKNOWLEDGED") {
+      db.prepare("UPDATE device_alarm_state SET acknowledgement_state = 'UNACKNOWLEDGED', requested_at = NULL, acknowledged_at = NULL, updated_at = ? WHERE shipment_id = ? AND device_id = ?").run(recordedAt, shipmentId, deviceId);
+    } else if (deviceAcknowledged === true && existing.acknowledgement_state !== "CONFIRMED") {
+      db.prepare("UPDATE device_alarm_state SET acknowledgement_state = 'CONFIRMED', acknowledged_at = COALESCE(acknowledged_at, ?), updated_at = ? WHERE shipment_id = ? AND device_id = ?").run(recordedAt, recordedAt, shipmentId, deviceId);
+    } else {
+      db.prepare("UPDATE device_alarm_state SET updated_at = ? WHERE shipment_id = ? AND device_id = ?").run(recordedAt, shipmentId, deviceId);
+    }
     return;
   }
-  db.prepare("INSERT INTO device_alarm_state (shipment_id, device_id, active, acknowledgement_state, requested_at, acknowledged_at, updated_at) VALUES (?, ?, 1, 'UNACKNOWLEDGED', NULL, NULL, ?) ON CONFLICT(shipment_id, device_id) DO UPDATE SET active = 1, acknowledgement_state = 'UNACKNOWLEDGED', requested_at = NULL, acknowledged_at = NULL, updated_at = excluded.updated_at").run(shipmentId, deviceId, recordedAt);
+  const acknowledgementState = deviceAcknowledged === true ? "CONFIRMED" : "UNACKNOWLEDGED";
+  db.prepare("INSERT INTO device_alarm_state (shipment_id, device_id, active, acknowledgement_state, requested_at, acknowledged_at, updated_at) VALUES (?, ?, 1, ?, NULL, ?, ?) ON CONFLICT(shipment_id, device_id) DO UPDATE SET active = 1, acknowledgement_state = excluded.acknowledgement_state, requested_at = NULL, acknowledged_at = excluded.acknowledged_at, updated_at = excluded.updated_at").run(shipmentId, deviceId, acknowledgementState, deviceAcknowledged === true ? recordedAt : null, recordedAt);
 }
 
 function alarmState(shipmentId, deviceId) {
   return db.prepare("SELECT active, acknowledgement_state, requested_at, acknowledged_at, updated_at FROM device_alarm_state WHERE shipment_id = ? AND device_id = ?").get(shipmentId, deviceId)
     || { active: 0, acknowledgement_state: "NONE", requested_at: null, acknowledged_at: null, updated_at: null };
+}
+
+// A persisted acknowledgement is only trustworthy while the device is still
+// sending fresh readings. After a reboot the ESP32 starts its buzzer active;
+// do not let an old CONFIRMED record make the UI claim it is silenced.
+const DEVICE_ACK_FRESHNESS_MS = 15_000;
+function isFreshDeviceAcknowledgement(state) {
+  if (state.acknowledgement_state !== "CONFIRMED" || !state.updated_at) return false;
+  const updatedAt = Date.parse(state.updated_at);
+  return Number.isFinite(updatedAt) && Date.now() - updatedAt <= DEVICE_ACK_FRESHNESS_MS;
 }
 
 function publicUser(user) {
@@ -183,7 +200,9 @@ async function deliverDeviceAcknowledgement(deviceId) {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: "{}",
-    signal: AbortSignal.timeout(5000),
+    // The ESP32 services /ack between its sensor upload and alarm-poll loops.
+    // Allow one complete loop turn so a busy board is not left in PENDING.
+    signal: AbortSignal.timeout(15000),
   });
   if (!response.ok) throw new Error(`ESP32 returned HTTP ${response.status}`);
   const body = await response.json().catch(() => ({}));
@@ -220,9 +239,12 @@ const server = createServer(async (request, response) => {
       const shipmentId = String(url.searchParams.get("shipmentId") || "demo-shipment");
       const deviceId = String(url.searchParams.get("deviceId") || "vault-device-01");
       const state = alarmState(shipmentId, deviceId);
+      const acknowledgementState = state.acknowledgement_state === "CONFIRMED" && !isFreshDeviceAcknowledgement(state)
+        ? "UNACKNOWLEDGED"
+        : state.acknowledgement_state;
       return send(response, 200, {
         active: Boolean(state.active),
-        acknowledgementState: state.acknowledgement_state,
+        acknowledgementState,
         requestedAt: state.requested_at,
         acknowledgedAt: state.acknowledged_at,
       });
@@ -233,11 +255,12 @@ const server = createServer(async (request, response) => {
       const deviceId = String(body.deviceId || "vault-device-01");
       const state = alarmState(shipmentId, deviceId);
       if (!state.active) return send(response, 409, { error: "There is no active device alarm to acknowledge" });
-      if (state.acknowledgement_state === "CONFIRMED") {
+      if (state.acknowledgement_state === "CONFIRMED" && isFreshDeviceAcknowledgement(state)) {
         return send(response, 200, { active: true, acknowledgementState: "CONFIRMED", acknowledgedAt: state.acknowledged_at });
       }
       const now = new Date().toISOString();
-      if (state.acknowledgement_state === "UNACKNOWLEDGED") {
+      if (state.acknowledgement_state === "UNACKNOWLEDGED" ||
+          (state.acknowledgement_state === "CONFIRMED" && !isFreshDeviceAcknowledgement(state))) {
         db.prepare("UPDATE device_alarm_state SET acknowledgement_state = 'PENDING', requested_at = ?, updated_at = ? WHERE shipment_id = ? AND device_id = ?").run(now, now, shipmentId, deviceId);
         appendLedger(shipmentId, "ALARM_ACKNOWLEDGEMENT_REQUESTED", `Website acknowledgement requested for ${deviceId}`, now);
       }
@@ -268,7 +291,8 @@ const server = createServer(async (request, response) => {
       return send(response, 200, {
         acknowledge:
           Boolean(state.active) &&
-          (state.acknowledgement_state === "PENDING" || state.acknowledgement_state === "CONFIRMED"),
+          (state.acknowledgement_state === "PENDING" ||
+            (state.acknowledgement_state === "CONFIRMED" && isFreshDeviceAcknowledgement(state))),
       });
     }
     if (deviceAlarmMatch && request.method === "POST") {
@@ -295,13 +319,14 @@ const server = createServer(async (request, response) => {
       if (deviceHost) deviceHosts.set(deviceId, deviceHost);
       const temperature = Number(body.temperature);
       const humidity = body.humidity === undefined ? null : Number(body.humidity);
+      const deviceAcknowledged = body.alarmAcknowledged === true ? true : body.alarmAcknowledged === false ? false : undefined;
       if (!Number.isFinite(temperature) || temperature < -80 || temperature > 100) return send(response, 400, { error: "temperature must be a finite value between -80 and 100" });
       if (humidity !== null && (!Number.isFinite(humidity) || humidity < 0 || humidity > 100)) return send(response, 400, { error: "humidity must be between 0 and 100" });
       const recordedAt = body.timestamp ? new Date(body.timestamp).toISOString() : new Date().toISOString();
       ensureShipment(shipmentId);
       const status = statusFor(temperature);
       const reading = db.prepare("INSERT INTO readings (shipment_id, device_id, temperature, humidity, status, recorded_at) VALUES (?, ?, ?, ?, ?, ?) RETURNING *").get(shipmentId, deviceId, temperature, humidity, status, recordedAt);
-      updateAlarmState(shipmentId, deviceId, status, recordedAt);
+      updateAlarmState(shipmentId, deviceId, status, recordedAt, deviceAcknowledged);
       const entry = appendLedger(shipmentId, "TEMPERATURE_READING", `${temperature.toFixed(1)} °C · ${status}`, recordedAt);
       let telegram = { sent: false, skipped: true };
       if (status !== "SAFE") {

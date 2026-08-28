@@ -573,7 +573,9 @@ void sendReadingToVault(float temp, float hum) {
   json += "\"shipmentId\":\"" + String(vaultShipmentId) + "\",";
   json += "\"deviceId\":\"" + String(vaultDeviceId) + "\",";
   json += "\"temperature\":" + String(temp, 1) + ",";
-  json += "\"humidity\":" + String(hum, 1);
+  json += "\"humidity\":" + String(hum, 1) + ",";
+  json += "\"alarmAcknowledged\":";
+  json += alarmAcknowledged ? "true" : "false";
 
   if (rtcWorking) {
     DateTime now = rtc.now();

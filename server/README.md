@@ -12,7 +12,7 @@ Endpoints:
 - `GET /api/readings?shipmentId=...`
 - `GET /api/ledger?shipmentId=...`
 - `GET /api/alarms/status?shipmentId=...&deviceId=...`
-- `POST /api/readings` with `{ shipmentId, deviceId, temperature, humidity, timestamp }`
+- `POST /api/readings` with `{ shipmentId, deviceId, temperature, humidity, timestamp, alarmAcknowledged }`
 - `POST /api/alarms/acknowledge` with `{ shipmentId, deviceId }`
 - `GET` / `POST /api/devices/:deviceId/alarm` for ESP32 acknowledgement polling and confirmation
 - `POST /api/auth/register` with `{ email, password, organizationName }`
@@ -31,6 +31,9 @@ The API learns the ESP32's current LAN address from every reading upload. An
 alarm acknowledgement is relayed immediately to the board's `/ack` endpoint;
 the device polling endpoints remain as a firmware fallback. Set
 `VAULT_DEVICE_URL` only when the device must use a fixed explicit origin.
+Acknowledgement state is reconciled from the device's `alarmAcknowledged` flag;
+old confirmations are not shown as current after the device heartbeat goes
+stale.
 
 This layer is intentionally separate from the browser provider until the API
 contract is exercised and the frontend data-source swap is made as its own step.
