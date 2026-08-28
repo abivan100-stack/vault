@@ -261,6 +261,20 @@ export function ColdChainProvider({ children }: { children: ReactNode }) {
     return typeof stored === "number" && Number.isFinite(stored) ? stored : 0;
   });
 
+  // Read the investigation pointer once, before the persistence effect can
+  // overwrite it. Invalid or stale bytes are evidence too: preserve them
+  // beside the live key rather than silently replacing the only surviving
+  // record with a cleared state.
+  const [storedInvestigation] = useState<LedgerEntry | null>(() => {
+    const raw = readStorage(OPEN_INVESTIGATION_KEY);
+    if (raw === ABSENT || raw === null) return null;
+    if (raw === CORRUPT || !isLedgerEntry(raw) || raw.event !== "INVESTIGATION_OPEN") {
+      quarantineStorage(OPEN_INVESTIGATION_KEY);
+      return null;
+    }
+    return raw;
+  });
+
   const [secondsUntilLedgerAppend, setSecondsUntilLedgerAppend] = useState(
     Math.round(LEDGER_INTERVAL_MS / 1000),
   );
@@ -289,10 +303,7 @@ export function ColdChainProvider({ children }: { children: ReactNode }) {
     // Investigation at all — fall back to the separately persisted pointer
     // rather than defaulting to Cleared, which would silently drop a still-
     // open Investigation the moment its evidence aged out.
-    const stored = readStorage(OPEN_INVESTIGATION_KEY);
-    if (isLedgerEntry(stored) && stored.event === "INVESTIGATION_OPEN") {
-      return { status: "UNDER_INVESTIGATION", openEntry: stored };
-    }
+    if (storedInvestigation) return { status: "UNDER_INVESTIGATION", openEntry: storedInvestigation };
     return scanned;
   });
 
