@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { ChevronRight, Pause, Play, ShieldAlert } from "lucide-react";
+import { BellOff, Check, ChevronRight, ShieldAlert } from "lucide-react";
 import { useColdChain } from "@/context/ColdChainContext";
-import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import Stat from "@/components/Stat";
 import StatusPill from "@/components/StatusPill";
 import { playAnime } from "@/hooks/useAnime";
@@ -37,15 +37,17 @@ export default function MonitorPage() {
   const {
     temperature,
     status,
+    readings,
     isMonitoring,
-    setIsMonitoring,
     isForcingExcursion,
     forceExcursion,
-    readings,
+    secondsUntilLedgerAppend,
     chartPath,
     lastSyncAt,
-    secondsUntilLedgerAppend,
     investigation,
+    alarmAcknowledgementState,
+    acknowledgementError,
+    acknowledgeAlarm,
   } = useColdChain();
   const [hoveredId, setHoveredId] = useState<number | null>(null);
 
@@ -77,6 +79,8 @@ export default function MonitorPage() {
   const maxValue = values.length > 0 ? Math.max(...values) : temperature;
   const excursionCount = values.filter(isExcursion).length;
   const outOfCorridor = isExcursion(temperature);
+  const acknowledgementPending = alarmAcknowledgementState === "PENDING";
+  const acknowledgementConfirmed = alarmAcknowledgementState === "CONFIRMED";
 
   const xLabels = chartXLabels(readings);
 
@@ -86,7 +90,7 @@ export default function MonitorPage() {
         <div>
           <h1 className="text-[21px] font-semibold tracking-[-0.02em] text-ink">Monitor</h1>
           <p className="mt-1 text-[13.5px] text-ink-muted">
-            Live corridor for the box in transit. A reading every 2 seconds.
+            Live corridor for the box in transit. ESP32 readings sync continuously.
           </p>
         </div>
         <p className="tabular font-mono text-[12px] text-ink-subtle">
@@ -179,14 +183,39 @@ export default function MonitorPage() {
             />
           </dl>
 
-          <Button
-            variant={isMonitoring ? "outline" : "default"}
-            onClick={() => setIsMonitoring((current) => !current)}
-            className="mt-5 h-9 w-full gap-2 text-sm"
-          >
-            {isMonitoring ? <Pause size={15} aria-hidden="true" /> : <Play size={15} aria-hidden="true" />}
-            {isMonitoring ? "Pause simulation" : "Resume simulation"}
-          </Button>
+          {outOfCorridor && (
+            <div className="mt-5 rounded-lg border border-warning-line bg-warning-soft p-3.5">
+              <div className="flex flex-col gap-3">
+                <div className="min-w-0">
+                  <p className="text-[13px] font-medium text-ink">Hardware alarm active</p>
+                  <p className="mt-0.5 text-[12px] leading-relaxed text-ink-muted">
+                    {acknowledgementConfirmed
+                      ? "Acknowledged by the ESP32. Use acknowledge again if the buzzer resumes while this excursion remains open."
+                      : acknowledgementPending
+                        ? "Acknowledgement sent — waiting for the ESP32 to silence the buzzer."
+                        : "The buzzer will continue until an operator acknowledges this excursion."}
+                  </p>
+                </div>
+                <Button
+                  type="button"
+                  variant={acknowledgementConfirmed ? "outline" : "default"}
+                  className="w-full justify-center"
+                  onClick={() => void acknowledgeAlarm(acknowledgementConfirmed).catch(() => undefined)}
+                  aria-label="Acknowledge active hardware alarm"
+                >
+                  {acknowledgementConfirmed ? <Check aria-hidden="true" /> : <BellOff aria-hidden="true" />}
+                  {acknowledgementConfirmed
+                    ? "Acknowledge again"
+                    : acknowledgementPending
+                      ? "Retry acknowledgement"
+                      : "Acknowledge alarm"}
+                </Button>
+              </div>
+              {acknowledgementError && (
+                <p className="mt-2 text-[12px] text-destructive" role="alert">{acknowledgementError}</p>
+              )}
+            </div>
+          )}
 
           {/* The countdown, and — only while there is an excursion left to
               cause — a way to cause one. Deliberately a line of text rather

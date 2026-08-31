@@ -329,14 +329,9 @@ function Header({ isDark, onToggleTheme }: { isDark: boolean; onToggleTheme: () 
               <Package size={17} strokeWidth={2} aria-hidden="true" />
             </span>
             <span className="min-w-0 leading-none">
-              <span className="flex items-center gap-2">
-                <span className="text-[15px] font-semibold tracking-[-0.01em] text-ink">Vault</span>
-                <span className="hidden rounded border border-line px-1.5 py-px text-[10px] font-semibold uppercase tracking-[0.06em] text-ink-subtle xl:inline">
-                  Prototype
-                </span>
-              </span>
-              <span className="mt-1 block truncate font-mono text-[11px] text-ink-subtle">
-                Cold-chain 01
+              <span className="text-[15px] font-semibold tracking-[-0.01em] text-ink">Vault</span>
+              <span className="mt-1 block truncate text-[11px] tracking-[0.02em] text-ink-subtle">
+                Live cold-chain telemetry
               </span>
             </span>
           </Link>
@@ -370,7 +365,7 @@ function Header({ isDark, onToggleTheme }: { isDark: boolean; onToggleTheme: () 
 
             <span
               className="hidden h-9 items-center gap-2 whitespace-nowrap rounded-lg border border-line bg-raised px-3 shadow-e1 sm:inline-flex"
-              title="Local simulation — a reading every 2 seconds"
+              title="Live ESP32 feed — readings sync continuously"
             >
               <span className="live-dot" data-state={liveState} />
               <span className="text-[12px] font-semibold tracking-[0.04em] text-ink">{liveLabel}</span>
@@ -484,6 +479,7 @@ function Layout({ isDark, onToggleTheme }: { isDark: boolean; onToggleTheme: () 
         <div
           className={`${PAGE_CONTAINER} flex flex-col gap-1 py-5 text-[12.5px] text-ink-subtle sm:flex-row sm:items-center sm:justify-end`}
         >
+          <span>Vault — live cold-chain monitoring.</span>
           <span className="font-mono">Build 0.1.0</span>
         </div>
       </footer>

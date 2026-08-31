@@ -1,6 +1,9 @@
 node_modules/
 dist/
+.vite/
 coverage/
+data/*.db*
+**/debug.log
 
 # Playwright MCP scratch output
 .playwright-mcp/

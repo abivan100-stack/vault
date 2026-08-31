@@ -313,6 +313,8 @@ export default function LedgerPage() {
   const [resolveOpen, setResolveOpen] = useState(false);
   const [resolveReason, setResolveReason] = useState<ResolutionReason | "">("");
   const [resolveNote, setResolveNote] = useState("");
+  const [backendCount, setBackendCount] = useState<number | null>(null);
+  const [backendLatest, setBackendLatest] = useState<string | null>(null);
   const copyTimerRef = useRef<number | null>(null);
 
   useEffect(
@@ -321,6 +323,26 @@ export default function LedgerPage() {
     },
     [],
   );
+
+  useEffect(() => {
+    let cancelled = false;
+    const syncBackendLedger = async () => {
+      try {
+        const response = await fetch("http://127.0.0.1:8787/api/ledger?shipmentId=TEST-01");
+        if (!response.ok) return;
+        const payload = (await response.json()) as { entries?: Array<{ event: string }> };
+        if (!cancelled && payload.entries) {
+          setBackendCount(payload.entries.length);
+          setBackendLatest(payload.entries.at(-1)?.event || null);
+        }
+      } catch {
+        if (!cancelled) setBackendCount(null);
+      }
+    };
+    void syncBackendLedger();
+    const interval = window.setInterval(() => void syncBackendLedger(), 5000);
+    return () => { cancelled = true; window.clearInterval(interval); };
+  }, []);
 
   const newestFirst = useMemo(() => [...ledger].reverse(), [ledger]);
 
@@ -418,6 +440,13 @@ export default function LedgerPage() {
           </Button>
         </div>
       </header>
+
+      {backendCount !== null && (
+        <div className="flex items-center justify-between rounded-lg border border-brand-line bg-brand-soft/40 px-3.5 py-2.5 text-[13px] text-ink-muted">
+          <span>Backend ledger connected · {backendCount} device {backendCount === 1 ? "entry" : "entries"}</span>
+          <span className="font-mono text-[11px] text-ink-subtle">latest: {backendLatest || "—"}</span>
+        </div>
+      )}
 
       {/* Chain verification and Investigation status, side by side. One is a
           cryptographic fact and the other a workflow fact: they are shown

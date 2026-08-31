@@ -21,7 +21,8 @@ import {
   coveredExcursionSequences,
   deriveInvestigationState,
   hasInvestigationEvidence,
-  isLedgerEntry,
+  investigationPointerMatches,
+  isPersistedInvestigationPointer,
   parseChain,
   resolutionReasonLabel,
   verifyChain,
@@ -30,6 +31,7 @@ import {
   type LedgerEntry,
   type LedgerEventType,
   type ParsedChain,
+  type PersistedInvestigationPointer,
   type ResolutionReason,
 } from "@/lib/ledger";
 import {
@@ -70,6 +72,11 @@ const OPEN_INVESTIGATION_KEY = "vault:openInvestigation";
 
 const SEED_TEMPERATURE = 4.8;
 const SAMPLES_PER_LEDGER_APPEND = Math.max(1, Math.round(LEDGER_INTERVAL_MS / SAMPLE_INTERVAL_MS));
+const VAULT_API_URL = "http://127.0.0.1:8787";
+const VAULT_API_SHIPMENT_ID = "TEST-01";
+const VAULT_API_DEVICE_ID = "esp32-vault-01";
+
+export type AlarmAcknowledgementState = "NONE" | "UNACKNOWLEDGED" | "PENDING" | "CONFIRMED";
 
 /** Event types surfaced in the notification bell. */
 const NOTIFIABLE_EVENTS: readonly LedgerEventType[] = [
@@ -199,6 +206,7 @@ type ColdChainValue = {
   updateFieldLog: (patch: Partial<FieldLogMeta>) => void;
   resetFieldLog: () => void;
   createNewShipment: () => void;
+  simulateExcursion: (direction: "hot" | "cold") => void;
   recordHandoff: () => void;
   ledger: LedgerEntry[];
   chainVerification: ChainVerification;
@@ -210,6 +218,9 @@ type ColdChainValue = {
   notifications: LedgerEntry[];
   unreadNotificationCount: number;
   markNotificationsRead: () => void;
+  alarmAcknowledgementState: AlarmAcknowledgementState;
+  acknowledgementError: string | null;
+  acknowledgeAlarm: (force?: boolean) => Promise<void>;
 };
 
 const ColdChainContext = createContext<ColdChainValue | null>(null);
@@ -227,6 +238,9 @@ export function ColdChainProvider({ children }: { children: ReactNode }) {
   const [isForcingExcursion, setIsForcingExcursion] = useState(false);
   const forcingExcursionRef = useRef(false);
   const [readings, setReadings] = useState<Reading[]>(() => seedReadings(new Date()));
+  const [liveApiAvailable, setLiveApiAvailable] = useState(false);
+  const [alarmAcknowledgementState, setAlarmAcknowledgementState] = useState<AlarmAcknowledgementState>("NONE");
+  const [acknowledgementError, setAcknowledgementError] = useState<string | null>(null);
 
   const [fieldLogMeta, setFieldLogMeta] = useState<FieldLogMeta>(() => {
     const fallback = createFieldLog(new Date(), randomSerial());
@@ -271,6 +285,20 @@ export function ColdChainProvider({ children }: { children: ReactNode }) {
     return typeof stored === "number" && Number.isFinite(stored) ? stored : 0;
   });
 
+  // Read the investigation pointer once, before the persistence effect can
+  // overwrite it. Invalid or stale bytes are evidence too: preserve them
+  // beside the live key rather than silently replacing the only surviving
+  // record with a cleared state.
+  const [storedInvestigation] = useState<PersistedInvestigationPointer | null>(() => {
+    const raw = readStorage(OPEN_INVESTIGATION_KEY);
+    if (raw === ABSENT || raw === null) return null;
+    if (raw === CORRUPT || !isPersistedInvestigationPointer(raw)) {
+      quarantineStorage(OPEN_INVESTIGATION_KEY);
+      return null;
+    }
+    return raw;
+  });
+
   const [secondsUntilLedgerAppend, setSecondsUntilLedgerAppend] = useState(
     Math.round(LEDGER_INTERVAL_MS / 1000),
   );
@@ -285,6 +313,9 @@ export function ColdChainProvider({ children }: { children: ReactNode }) {
   const latestValueRef = useRef(temperature);
   const statusRef = useRef<Status>(status);
   const sampleCountRef = useRef(0);
+  const nextLedgerSequenceRef = useRef(
+    ledger.length > 0 ? ledger[ledger.length - 1].sequence + 1 : 1,
+  );
   // Real state, not derived from `ledger` on every render: `ledger` is capped
   // at MAX_LEDGER_ENTRIES, so an old INVESTIGATION_OPEN can slide out of the
   // retained window while still logically open, and rescanning from scratch
@@ -294,17 +325,29 @@ export function ColdChainProvider({ children }: { children: ReactNode }) {
   // naturally carries forward across everything in between.
   const [investigation, setInvestigation] = useState<InvestigationState>(() => {
     const scanned = deriveInvestigationState(ledger);
+    if (storedInvestigation && !investigationPointerMatches(storedInvestigation, ledger, fieldLogMeta.logId)) {
+      quarantineStorage(OPEN_INVESTIGATION_KEY);
+      return scanned;
+    }
     if (hasInvestigationEvidence(ledger)) return scanned;
     // The retained window has nothing to say about Cleared vs Under
     // Investigation at all — fall back to the separately persisted pointer
     // rather than defaulting to Cleared, which would silently drop a still-
     // open Investigation the moment its evidence aged out.
-    const stored = readStorage(OPEN_INVESTIGATION_KEY);
-    if (isLedgerEntry(stored) && stored.event === "INVESTIGATION_OPEN") {
-      return { status: "UNDER_INVESTIGATION", openEntry: stored };
-    }
+    if (storedInvestigation) return { status: "UNDER_INVESTIGATION", openEntry: storedInvestigation.openEntry };
     return scanned;
   });
+
+  // Keep the complete set of excursions covered by the open Investigation.
+  // Unlike a scan of `ledger`, this survives the retained-window cap and is
+  // persisted alongside the investigation pointer.
+  const coveredExcursionsRef = useRef<number[]>(
+    storedInvestigation && investigationPointerMatches(storedInvestigation, ledger, fieldLogMeta.logId)
+      ? [...(storedInvestigation.coveredExcursionSequences ?? [])]
+      : investigation.openEntry
+        ? coveredExcursionSequences(ledger, investigation.openEntry.sequence - 1)
+        : [],
+  );
 
   // Mirrors whether an Investigation is currently open, read/written
   // synchronously inside the interval callback so a run of excursions within
@@ -323,8 +366,11 @@ export function ColdChainProvider({ children }: { children: ReactNode }) {
     ledger.length > 0 ? ledger[ledger.length - 1].sequence : 0,
   );
 
-  const appendLedger = useCallback((event: LedgerEventType, detail: string, at: Date) => {
+  const appendLedger = useCallback((event: LedgerEventType, detail: string, at: Date): number => {
+    const sequence = nextLedgerSequenceRef.current;
+    nextLedgerSequenceRef.current += 1;
     setLedger((previous) => appendEntry(previous, event, detail, at));
+    return sequence;
   }, []);
 
   useEffect(() => {
@@ -367,11 +413,19 @@ export function ColdChainProvider({ children }: { children: ReactNode }) {
   }, [notificationsSeen]);
 
   useEffect(() => {
-    writeStorage(OPEN_INVESTIGATION_KEY, investigation.openEntry);
-  }, [investigation]);
+    const pointer = investigation.openEntry
+      ? {
+          openEntry: investigation.openEntry,
+          shipmentKey: fieldLogMeta.logId,
+          ledgerHeadHash: ledger.length > 0 ? ledger[ledger.length - 1].hash : "0".repeat(64),
+          coveredExcursionSequences: [...coveredExcursionsRef.current],
+        }
+      : null;
+    writeStorage(OPEN_INVESTIGATION_KEY, pointer);
+  }, [fieldLogMeta.logId, investigation, ledger]);
 
   useEffect(() => {
-    if (!isMonitoring) return undefined;
+    if (!isMonitoring || liveApiAvailable) return undefined;
 
     const interval = window.setInterval(() => {
       // Every impure step happens here, outside the state updaters below.
@@ -398,11 +452,12 @@ export function ColdChainProvider({ children }: { children: ReactNode }) {
       if (nextStatus !== statusRef.current) {
         statusRef.current = nextStatus;
         const movement = nextStatus === "EXCURSION" ? "left" : "back inside";
+
         // An operator-induced excursion is recorded as such. The reading is
         // real either way, but a trail that could not distinguish the two
         // would be a trail asserting more than it knows.
         const cause = nextStatus === "EXCURSION" && forcing ? " (operator-induced)" : "";
-        appendLedger(
+        const excursionSequence = appendLedger(
           nextStatus === "EXCURSION" ? "EXCURSION_OPEN" : "EXCURSION_CLEAR",
           `${value.toFixed(1)} °C — ${movement} safe corridor${cause}`,
           at,
@@ -412,13 +467,18 @@ export function ColdChainProvider({ children }: { children: ReactNode }) {
         // open, further breaches are absorbed into it rather than opening a
         // second — the operator is already on the hook for one unresolved
         // problem, not a new one per alarm.
-        if (nextStatus === "EXCURSION" && !investigationOpenRef.current) {
-          investigationOpenRef.current = true;
-          appendLedger(
-            "INVESTIGATION_OPEN",
-            `Investigation opened — triggered by excursion at ${value.toFixed(1)} °C`,
-            at,
+        if (nextStatus === "EXCURSION") {
+          coveredExcursionsRef.current = Array.from(
+            new Set([...coveredExcursionsRef.current, excursionSequence]),
           );
+          if (!investigationOpenRef.current) {
+            investigationOpenRef.current = true;
+            appendLedger(
+              "INVESTIGATION_OPEN",
+              `Investigation opened — triggered by excursion at ${value.toFixed(1)} °C`,
+              at,
+            );
+          }
         }
       }
 
@@ -432,7 +492,7 @@ export function ColdChainProvider({ children }: { children: ReactNode }) {
     }, SAMPLE_INTERVAL_MS);
 
     return () => window.clearInterval(interval);
-  }, [isMonitoring, appendLedger]);
+  }, [isMonitoring, liveApiAvailable, appendLedger]);
 
   // These three read the current record from the closure rather than from an
   // updater argument. Appending to the ledger is a side effect, and a state
@@ -497,11 +557,38 @@ export function ColdChainProvider({ children }: { children: ReactNode }) {
     // so `investigation` resets on its own once this append lands. Only the
     // interval callback's synchronous ref guard needs resetting here.
     investigationOpenRef.current = false;
+    coveredExcursionsRef.current = [];
 
     // The trail is append-only: a new shipment opens a new record on the same
     // chain rather than erasing what came before.
     appendLedger("SHIPMENT_CREATE", describeShipment(next), now);
   }, [appendLedger]);
+
+  const simulateExcursion = useCallback(
+    (direction: "hot" | "cold") => {
+      const at = new Date();
+      const value = direction === "hot" ? 8.4 : 1.6;
+      const reading: Reading = { id: nextReadingIdRef.current, at: at.toISOString(), value };
+      nextReadingIdRef.current += 1;
+      latestValueRef.current = value;
+      statusRef.current = "EXCURSION";
+      setReadings((previous) => pushReading(previous, reading));
+
+      const excursionSequence = appendLedger(
+        "EXCURSION_OPEN",
+        `${value.toFixed(1)} °C — simulated ${direction} excursion`,
+        at,
+      );
+      coveredExcursionsRef.current = Array.from(
+        new Set([...coveredExcursionsRef.current, excursionSequence]),
+      );
+      if (!investigationOpenRef.current) {
+        investigationOpenRef.current = true;
+        appendLedger("INVESTIGATION_OPEN", `Investigation opened — simulated excursion at ${value.toFixed(1)} °C`, at);
+      }
+    },
+    [appendLedger],
+  );
 
   const recordHandoff = useCallback(() => {
     const now = new Date();
@@ -523,11 +610,7 @@ export function ColdChainProvider({ children }: { children: ReactNode }) {
       const openEntry = investigation.openEntry;
       if (!openEntry) return;
 
-      // The triggering excursion is appended one sequence before its
-      // INVESTIGATION_OPEN, so the covered set starts there. Excursions that
-      // themselves aged out of the window are undercounted here — the same
-      // sliding-window limitation `verifyChain` already documents.
-      const covered = coveredExcursionSequences(ledger, openEntry.sequence - 1);
+      const covered = [...new Set(coveredExcursionsRef.current)].sort((a, b) => a - b);
       const coveredLabel =
         covered.length > 0
           ? `covered excursion${covered.length > 1 ? "s" : ""} ${covered.map((sequence) => `#${sequence}`).join(", ")}`
@@ -542,8 +625,9 @@ export function ColdChainProvider({ children }: { children: ReactNode }) {
       // this INVESTIGATION_RESOLVED entry lands, but the interval callback's
       // guard is a plain ref and must be reset here, synchronously.
       investigationOpenRef.current = false;
+      coveredExcursionsRef.current = [];
     },
-    [appendLedger, ledger, investigation],
+    [appendLedger, investigation],
   );
 
   const chartPath = useMemo(
@@ -568,6 +652,73 @@ export function ColdChainProvider({ children }: { children: ReactNode }) {
     setNotificationsSeen((previous) => Math.max(previous, newest));
   }, [notifications]);
 
+  const acknowledgeAlarm = useCallback(async (force = false) => {
+    setAcknowledgementError(null);
+    const response = await fetch(`${VAULT_API_URL}/api/alarms/acknowledge`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ shipmentId: VAULT_API_SHIPMENT_ID, deviceId: VAULT_API_DEVICE_ID, force }),
+    });
+    const payload = (await response.json()) as {
+      acknowledgementState?: AlarmAcknowledgementState;
+      deliveryError?: string;
+      error?: string;
+    };
+    if (!response.ok) {
+      const message = payload.error || "Could not request the hardware acknowledgement.";
+      setAcknowledgementError(message);
+      throw new Error(message);
+    }
+    setAlarmAcknowledgementState(payload.acknowledgementState || "PENDING");
+    if (payload.deliveryError) setAcknowledgementError(`${payload.deliveryError}. Retry after the next device reading.`);
+  }, []);
+
+  // Prefer real ESP32 readings whenever the API is reachable. The local
+  // simulator remains available as a fallback for offline demos.
+  useEffect(() => {
+    let cancelled = false;
+    const syncFromApi = async () => {
+      try {
+        const response = await fetch(
+          `${VAULT_API_URL}/api/readings?shipmentId=${encodeURIComponent(VAULT_API_SHIPMENT_ID)}`,
+        );
+        if (!response.ok) throw new Error("API request failed");
+        const payload = (await response.json()) as {
+          readings?: Array<{ id: number; temperature: number; recorded_at: string }>;
+        };
+        const alarmResponse = await fetch(
+          `${VAULT_API_URL}/api/alarms/status?shipmentId=${encodeURIComponent(VAULT_API_SHIPMENT_ID)}&deviceId=${encodeURIComponent(VAULT_API_DEVICE_ID)}`,
+        );
+        if (!alarmResponse.ok) throw new Error("Alarm state request failed");
+        const alarm = (await alarmResponse.json()) as { acknowledgementState?: AlarmAcknowledgementState };
+        if (!cancelled) {
+          const nextAcknowledgementState = alarm.acknowledgementState || "NONE";
+          setAlarmAcknowledgementState(nextAcknowledgementState);
+          if (nextAcknowledgementState !== "PENDING") setAcknowledgementError(null);
+        }
+        const incoming = (payload.readings || [])
+          .filter((item) => Number.isFinite(item.temperature) && Boolean(item.recorded_at))
+          .slice(-READING_WINDOW)
+          .map((item) => ({ id: item.id, at: item.recorded_at, value: item.temperature }));
+        if (cancelled || incoming.length === 0) return;
+        const latest = incoming[incoming.length - 1];
+        latestValueRef.current = latest.value;
+        statusRef.current = statusFor(latest.value);
+        nextReadingIdRef.current = latest.id + 1;
+        setReadings(incoming);
+        setLiveApiAvailable(true);
+      } catch {
+        if (!cancelled) setLiveApiAvailable(false);
+      }
+    };
+    void syncFromApi();
+    const interval = window.setInterval(() => void syncFromApi(), 5000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, []);
+
   const lastSyncAt = readings.length > 0 ? readings[readings.length - 1].at : null;
 
   const value = useMemo<ColdChainValue>(
@@ -586,6 +737,7 @@ export function ColdChainProvider({ children }: { children: ReactNode }) {
       updateFieldLog,
       resetFieldLog,
       createNewShipment,
+      simulateExcursion,
       recordHandoff,
       ledger,
       chainVerification,
@@ -595,6 +747,9 @@ export function ColdChainProvider({ children }: { children: ReactNode }) {
       notifications,
       unreadNotificationCount,
       markNotificationsRead,
+      alarmAcknowledgementState,
+      acknowledgementError,
+      acknowledgeAlarm,
     }),
     [
       temperature,
@@ -610,6 +765,7 @@ export function ColdChainProvider({ children }: { children: ReactNode }) {
       updateFieldLog,
       resetFieldLog,
       createNewShipment,
+      simulateExcursion,
       recordHandoff,
       ledger,
       chainVerification,
@@ -619,6 +775,9 @@ export function ColdChainProvider({ children }: { children: ReactNode }) {
       notifications,
       unreadNotificationCount,
       markNotificationsRead,
+      alarmAcknowledgementState,
+      acknowledgementError,
+      acknowledgeAlarm,
     ],
   );
 

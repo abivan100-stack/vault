@@ -1,4 +1,4 @@
-import { Check, Copy, MapPin, Settings2, Thermometer, Truck } from "lucide-react";
+import { Check, Copy, Download, MapPin, Settings2, Thermometer, Truck } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useColdChain } from "@/context/ColdChainContext";
 import { Button } from "@/components/ui/button";
@@ -8,9 +8,10 @@ import { useToast } from "@/hooks/useToast";
 import { boxSerial, parseDoses, parseRoute } from "@/lib/shipment";
 import { formatClock, formatIsoDate } from "@/lib/simulation";
 import { SAFE_MAX_C, SAFE_MIN_C } from "@/lib/chart";
+import { reportHtml, summarizeShipmentReport } from "@/lib/report";
 
 export default function ShipmentPage() {
-  const { fieldLogMeta, status, temperature } = useColdChain();
+  const { fieldLogMeta, status, temperature, readings, ledger, chainVerification, discardedEntryCount } = useColdChain();
   const navigate = useNavigate();
   const { toast, showToast } = useToast();
 
@@ -37,6 +38,18 @@ export default function ShipmentPage() {
     } catch {
       showToast("Copy failed — clipboard unavailable", "error");
     }
+  };
+
+  const handleExportReport = () => {
+    const report = summarizeShipmentReport(fieldLogMeta, readings, ledger, chainVerification, discardedEntryCount);
+    const reportUrl = URL.createObjectURL(new Blob([reportHtml(report)], { type: "text/html" }));
+    const reportWindow = window.open(reportUrl, "_blank", "width=900,height=900");
+    if (!reportWindow) {
+      URL.revokeObjectURL(reportUrl);
+      showToast("Report blocked — allow pop-ups to export", "error");
+      return;
+    }
+    window.setTimeout(() => URL.revokeObjectURL(reportUrl), 60_000);
   };
 
   return (
@@ -199,9 +212,10 @@ export default function ShipmentPage() {
             </dl>
 
             {isHandedOff && (
-              <p className="mt-4 rounded-lg bg-success-soft px-3 py-2 text-[13px] text-success">
-                Handoff recorded on the ledger.
-              </p>
+              <div className="mt-4 space-y-3">
+                <p className="rounded-lg bg-success-soft px-3 py-2 text-[13px] text-success">Handoff recorded on the ledger.</p>
+                <Button variant="outline" onClick={handleExportReport} className="h-9 w-full gap-2 text-sm"><Download size={15} aria-hidden="true" /> Export PDF report</Button>
+              </div>
             )}
 
             <Button
