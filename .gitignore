@@ -17,3 +17,11 @@ data/*.db*
 /*.png
 /*.jpg
 /*.gif
+
+# Backend credentials. .env.example is the tracked template; the real values
+# never are. Ignore every .env variant and allow the template back, rather
+# than listing the ones we happened to think of -- Vite also reads
+# .env.production and .env.development, and those hold real keys too.
+.env
+.env.*
+!.env.example

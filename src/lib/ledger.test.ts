@@ -6,15 +6,20 @@ import {
   coveredExcursionSequences,
   deriveInvestigationState,
   entryDigest,
+  findByDigest,
   formatEventLabel,
   hasInvestigationEvidence,
   investigationPointerMatches,
+  isDigestQuery,
   isLedgerEntry,
   isPersistedInvestigationPointer,
   parseChain,
+  readingCelsius,
   resolutionReasonLabel,
+  shortEventLabel,
   verifyChain,
   type LedgerEntry,
+  type LedgerEventType,
 } from "./ledger";
 
 const T0 = new Date("2026-08-27T09:00:00.000Z");
@@ -397,5 +402,91 @@ describe("resolutionReasonLabel", () => {
     expect(resolutionReasonLabel("CARRIER_DELAY")).toBe("Carrier delay");
     expect(resolutionReasonLabel("CONFIRMED_LOSS")).toBe("Confirmed loss");
     expect(resolutionReasonLabel("OTHER")).toBe("Other");
+  });
+});
+
+/** A one-entry chain, so the suite below tests real appended entries. */
+function chainOf([event, detail]: [LedgerEventType, string]): LedgerEntry[] {
+  return appendEntry([], event, detail, T0);
+}
+
+describe("isDigestQuery", () => {
+  it("recognises a pasted digest, whole or shortened", () => {
+    const [entry] = appendEntry([], "TEMPERATURE_READING", "4.4 °C", T0);
+    expect(isDigestQuery(entry.hash)).toBe(true);
+    // Eight characters is what the UI shows in a shortened hash, so anything
+    // copied out of the app and pasted back is recognised.
+    expect(isDigestQuery(entry.hash.slice(0, 8))).toBe(true);
+  });
+
+  it("leaves ordinary searches alone", () => {
+    // These would otherwise be answered with "digest not found", which is a
+    // very different and much more alarming statement.
+    expect(isDigestQuery("excursion")).toBe(false);
+    expect(isDigestQuery("4.4")).toBe(false);
+    expect(isDigestQuery("beef")).toBe(false);
+    expect(isDigestQuery("")).toBe(false);
+  });
+
+  it("is case-insensitive and tolerates surrounding whitespace", () => {
+    const [entry] = appendEntry([], "TEMPERATURE_READING", "4.4 °C", T0);
+    expect(isDigestQuery(`  ${entry.hash.toUpperCase()}  `)).toBe(true);
+  });
+});
+
+describe("findByDigest", () => {
+  it("finds the entry a digest belongs to", () => {
+    const chain = buildChain(6);
+    const target = chain[3];
+    expect(findByDigest(chain, target.hash)?.sequence).toBe(target.sequence);
+    expect(findByDigest(chain, target.hash.slice(0, 10))?.sequence).toBe(target.sequence);
+  });
+
+  it("returns nothing for a digest that is not in the window", () => {
+    // The caller has to be careful with this: it means either "never written"
+    // or "aged out", and nothing here can tell the two apart.
+    expect(findByDigest(buildChain(6), "f".repeat(64))).toBeNull();
+  });
+
+  it("refuses to answer a query that is not a digest at all", () => {
+    const chain = buildChain(6);
+    expect(findByDigest(chain, "reading")).toBeNull();
+  });
+});
+
+describe("shortEventLabel", () => {
+  it("says the event once, beside a payload that says the rest", () => {
+    // `TEMPERATURE READING` next to a detail reading `4.4 °C` states the same
+    // fact twice, at the width of a whole column.
+    expect(shortEventLabel("TEMPERATURE_READING")).toBe("Reading");
+    expect(shortEventLabel("INVESTIGATION_RESOLVED")).toBe("Resolved");
+  });
+
+  it("distinguishes an excursion opening from its recovery", () => {
+    expect(shortEventLabel("EXCURSION_OPEN")).not.toBe(shortEventLabel("EXCURSION_CLEAR"));
+  });
+});
+
+describe("readingCelsius", () => {
+  it("recovers the temperature a reading recorded", () => {
+    const [entry] = chainOf(["TEMPERATURE_READING", "4.4 °C"]);
+    expect(readingCelsius(entry)).toBe(4.4);
+  });
+
+  it("recovers it from an excursion's fuller detail too", () => {
+    const [entry] = chainOf(["EXCURSION_OPEN", "8.2 °C — left safe corridor"]);
+    expect(readingCelsius(entry)).toBe(8.2);
+  });
+
+  it("carries no temperature for events that record none", () => {
+    const [entry] = chainOf(["HANDOFF_INIT", "Handoff confirmed — DELHI → JAIPUR"]);
+    expect(readingCelsius(entry)).toBeNull();
+  });
+
+  it("returns null rather than a wrong number for an unparseable detail", () => {
+    // Stored state is hostile: a hand-edited detail must not become a
+    // temperature the report then presents as a measurement.
+    const [entry] = chainOf(["TEMPERATURE_READING", "nonsense"]);
+    expect(readingCelsius(entry)).toBeNull();
   });
 });

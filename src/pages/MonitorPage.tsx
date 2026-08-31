@@ -38,6 +38,10 @@ export default function MonitorPage() {
     temperature,
     status,
     readings,
+    isMonitoring,
+    isForcingExcursion,
+    forceExcursion,
+    secondsUntilLedgerAppend,
     chartPath,
     lastSyncAt,
     investigation,
@@ -213,9 +217,32 @@ export default function MonitorPage() {
             </div>
           )}
 
-          <p className="tabular mt-5 text-center font-mono text-[11.5px] text-ink-subtle">
-            Live hardware feed · readings refresh automatically
-          </p>
+          {/* The countdown, and — only while there is an excursion left to
+              cause — a way to cause one. Deliberately a line of text rather
+              than a control panel: it is a demonstration aid on a page whose
+              subject is the readings, and it disappears the moment it has
+              nothing to do. */}
+          <div className="tabular mt-3 flex flex-wrap items-center justify-center gap-x-2 gap-y-1 text-center font-mono text-[11.5px] text-ink-subtle">
+            <span>
+              {isMonitoring
+                ? `Next ledger append in ${secondsUntilLedgerAppend}s`
+                : "Paused — no readings, no ledger appends"}
+            </span>
+            {isMonitoring && status === "SAFE" && (
+              <>
+                <span aria-hidden="true">·</span>
+                <button
+                  type="button"
+                  onClick={forceExcursion}
+                  disabled={isForcingExcursion}
+                  title="Drives the simulated readings out of the 2–8 °C corridor, so an excursion and its investigation can be exercised. The resulting ledger entry records that it was operator-induced."
+                  className="underline decoration-dotted underline-offset-4 transition-colors hover:text-ink-muted disabled:no-underline disabled:opacity-70"
+                >
+                  {isForcingExcursion ? "forcing…" : "force excursion"}
+                </button>
+              </>
+            )}
+          </div>
         </Card>
 
         {/* Chart */}

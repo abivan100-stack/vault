@@ -5,26 +5,20 @@ import {
   ClipboardList,
   Copy,
   Download,
-  Link2,
-  CircleDot,
+  FileText,
+  Fingerprint,
   Search,
   ShieldAlert,
   ShieldCheck,
 } from "lucide-react";
 import { useColdChain } from "@/context/ColdChainContext";
+import { useReportExport } from "@/hooks/useReportExport";
+import { useCapability } from "@/hooks/useCapability";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import StatusPill from "@/components/StatusPill";
 import { Label } from "@/components/ui/label";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import {
   Dialog,
   DialogContent,
@@ -33,17 +27,40 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  GENESIS_HASH,
   RESOLUTION_REASONS,
   coveredExcursionSequences,
   describeVerification,
-  formatEventLabel,
+  findByDigest,
+  isDigestQuery,
+  readingCelsius,
+  shortEventLabel,
   type LedgerEntry,
   type LedgerEventType,
   type ResolutionReason,
 } from "@/lib/ledger";
+import { SAFE_MAX_C, SAFE_MIN_C, isExcursion } from "@/lib/chart";
 import { shortHash } from "@/lib/hash";
-import { formatClock, formatIsoDate } from "@/lib/simulation";
+import { formatClock, formatDayLabel, formatIsoDate } from "@/lib/simulation";
 import { downloadCsv, toCsv } from "@/lib/csv";
+
+/**
+ * The Ledger, as a chain rather than a table.
+ *
+ * The table this replaced had three problems that were really one problem: it
+ * rendered a chain as a spreadsheet. Every row shouted `TEMPERATURE READING`
+ * beside a detail column reading `4.4 °C` — the same fact twice — and because
+ * that detail was six characters wide in a column sized for prose, most of
+ * each row was a gap between the temperature and the timestamp.
+ *
+ * So the readings stopped being rows of text. A reading is now a marker on a
+ * miniature of the corridor it was measured against, laid along a spine that
+ * is the chain itself. A run of readings reads as a temperature trace; the
+ * events that actually happened — an excursion, a handoff, an investigation
+ * resolving — punctuate it as labelled links. Nothing is repeated, nothing is
+ * padded, and scanning the trail now tells you the shape of the shipment
+ * rather than only its contents.
+ */
 
 type FilterKey = "all" | "readings" | "excursions" | "investigations" | "shipment";
 
@@ -63,37 +80,19 @@ const FILTERS: { key: FilterKey; label: string; events: readonly LedgerEventType
   },
 ];
 
+const VISIBLE_ROWS = 14;
+
 const SELECT_CLASS =
   "h-8 w-full min-w-0 rounded-lg border border-input bg-raised px-2.5 text-[13.5px] text-ink transition-colors outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-transparent";
 
 const TEXTAREA_CLASS =
   "w-full min-w-0 rounded-lg border border-input bg-raised px-2.5 py-1.5 text-[13.5px] text-ink transition-colors outline-none placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 dark:bg-transparent";
 
-function eventTone(
-  event: LedgerEventType
-): "success" | "warning" | "brand" | "neutral" {
+function eventTone(event: LedgerEventType): "success" | "warning" | "brand" | "neutral" {
   if (event === "EXCURSION_OPEN" || event === "INVESTIGATION_OPEN") return "warning";
-  if (event === "INVESTIGATION_RESOLVED") return "success";
+  if (event === "INVESTIGATION_RESOLVED" || event === "EXCURSION_CLEAR") return "success";
   if (event === "HANDOFF_INIT" || event === "SHIPMENT_CREATE") return "brand";
   return "neutral";
-}
-
-function eventShortLabel(event: LedgerEventType): string {
-  switch (event) {
-    case "TEMPERATURE_READING": return "Reading";
-    case "EXCURSION_OPEN": return "Excursion opened";
-    case "EXCURSION_CLEAR": return "Excursion cleared";
-    case "INVESTIGATION_OPEN": return "Investigation opened";
-    case "INVESTIGATION_RESOLVED": return "Investigation resolved";
-    case "SHIPMENT_CREATE": return "Shipment created";
-    case "SHIPMENT_UPDATE": return "Shipment updated";
-    case "HANDOFF_INIT": return "Handoff recorded";
-  }
-}
-
-function readingValue(entry: LedgerEntry): string | null {
-  if (entry.event !== "TEMPERATURE_READING") return null;
-  return entry.detail.match(/-?\d+(?:\.\d+)?\s*°C/i)?.[0] ?? entry.detail;
 }
 
 function HashButton({
@@ -111,24 +110,203 @@ function HashButton({
       type="button"
       onClick={() => onCopy(hash)}
       title={hash}
-      className="inline-flex h-7 items-center gap-2 rounded-md border border-line bg-sunken px-2 transition-colors hover:border-line-strong hover:bg-sunken dark:bg-transparent dark:hover:border-line"
+      className="inline-flex h-7 shrink-0 items-center gap-2 rounded-md border border-line bg-sunken px-2 transition-colors hover:border-line-strong dark:bg-transparent dark:hover:border-line"
       aria-label={isCopied ? "Hash copied" : `Copy full hash ${hash}`}
     >
-      <span className="tabular font-mono text-[12px] text-ink-muted">{shortHash(hash)}</span>
+      <span className="tabular font-mono text-[11.5px] text-ink-muted">{shortHash(hash)}</span>
       {isCopied ? (
-        <Check size={13} className="text-success" aria-hidden="true" />
+        <Check size={12} className="text-success" aria-hidden="true" />
       ) : (
-        <Copy size={13} className="text-ink-subtle" aria-hidden="true" />
+        <Copy size={12} className="text-ink-subtle" aria-hidden="true" />
       )}
     </button>
+  );
+}
+
+/**
+ * The trail, as a table.
+ *
+ * An earlier revision drew each reading as a marker on a miniature of the safe
+ * corridor, hung off a vertical spine. It was the widest element on the row and
+ * carried a single fact -- one the value column already stated in text -- while
+ * the fields that make an entry auditable were squeezed into the margins. The
+ * design assumed a mixed trail that the simulated cadence does not produce: a
+ * ledger append every ten seconds is almost entirely readings, so the events
+ * that were meant to punctuate the trace are rare enough that the page read as
+ * a chart of one flat line.
+ *
+ * So: columns, with a header naming them. `Prev` sits beside `Digest` because
+ * the link each entry commits to is the point of the structure, and drawing a
+ * decorative line down the page asserted it without ever showing it.
+ */
+
+const COLUMNS: { key: string; label: string; className: string }[] = [
+  { key: "sequence", label: "#", className: "w-[56px]" },
+  { key: "time", label: "Time", className: "w-[84px]" },
+  { key: "event", label: "Event", className: "w-[124px]" },
+  { key: "detail", label: "Detail", className: "" },
+  { key: "prev", label: "Prev", className: "w-[136px]" },
+  { key: "digest", label: "Digest", className: "w-[156px]" },
+];
+
+function LedgerRow({
+  entry,
+  copiedHash,
+  onCopy,
+  highlighted,
+}: {
+  entry: LedgerEntry;
+  copiedHash: string | null;
+  onCopy: (hash: string) => void;
+  highlighted: boolean;
+}) {
+  const value = readingCelsius(entry);
+  const outsideCorridor = value !== null && isExcursion(value);
+
+  return (
+    <tr className={highlighted ? "bg-brand-soft" : "transition-colors hover:bg-sunken"}>
+      <td className="tabular px-3 py-1.5 font-mono text-[11.5px] text-ink-subtle">
+        {String(entry.sequence).padStart(3, "0")}
+      </td>
+
+      <td className="px-3 py-1.5">
+        <time dateTime={entry.at} className="tabular font-mono text-[11.5px] text-ink-subtle">
+          {formatClock(entry.at)}
+        </time>
+      </td>
+
+      <td className="whitespace-nowrap px-3 py-1.5">
+        {entry.event === "TEMPERATURE_READING" ? (
+          <span className="text-[12.5px] text-ink-muted">{shortEventLabel(entry.event)}</span>
+        ) : (
+          <StatusPill tone={eventTone(entry.event)} size="sm">
+            {shortEventLabel(entry.event)}
+          </StatusPill>
+        )}
+      </td>
+
+      {/* A reading's detail is its value, so it is set as a value: right-aligned
+          in the column's own width, warning-toned when it left the corridor.
+          Every other event carries prose, which is left as prose. */}
+      <td className="min-w-0 px-3 py-1.5">
+        {value !== null ? (
+          <span
+            className={`tabular font-mono text-[12.5px] ${
+              outsideCorridor ? "text-warning" : "text-ink"
+            }`}
+          >
+            {value.toFixed(1)} &deg;C
+          </span>
+        ) : (
+          <span className="block truncate text-[13px] text-ink" title={entry.detail}>
+            {entry.detail}
+          </span>
+        )}
+      </td>
+
+      <td className="whitespace-nowrap px-3 py-1.5">
+        <span
+          className="tabular font-mono text-[11.5px] text-ink-subtle"
+          title={entry.prevHash === GENESIS_HASH ? "Genesis -- no previous entry" : entry.prevHash}
+        >
+          {entry.prevHash === GENESIS_HASH ? "genesis" : shortHash(entry.prevHash)}
+        </span>
+      </td>
+
+      <td className="whitespace-nowrap px-3 py-1.5">
+        <HashButton hash={entry.hash} copiedHash={copiedHash} onCopy={onCopy} />
+      </td>
+    </tr>
+  );
+}
+
+/**
+ * The trail itself. Newest first, so it runs backwards in time down the page,
+ * broken by a heading whenever the day changes.
+ *
+ * The day headings are what let the Time column drop the date -- it was
+ * repeating the same eight characters on every row of a console that mostly
+ * shows one shipment on one day.
+ */
+function LedgerTable({
+  entries,
+  copiedHash,
+  onCopy,
+  highlightHash,
+  emptyMessage,
+}: {
+  entries: readonly LedgerEntry[];
+  copiedHash: string | null;
+  onCopy: (hash: string) => void;
+  highlightHash?: string | null;
+  emptyMessage: string;
+}) {
+  if (entries.length === 0) {
+    return <p className="px-5 py-12 text-center text-[13px] text-ink-muted">{emptyMessage}</p>;
+  }
+
+  // One flat body with the day headings interleaved as their own rows, rather
+  // than a tbody per day -- a table cannot nest and the zebra would restart.
+  const rows: JSX.Element[] = [];
+  let previousDay: string | null = null;
+
+  for (const entry of entries) {
+    const day = formatIsoDate(entry.at);
+    if (day !== previousDay) {
+      previousDay = day;
+      rows.push(
+        <tr key={`day-${day}`}>
+          <th
+            scope="colgroup"
+            colSpan={COLUMNS.length}
+            className="border-y border-line bg-sunken px-3 py-1.5 text-left text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-subtle"
+          >
+            {formatDayLabel(entry.at)}
+          </th>
+        </tr>,
+      );
+    }
+    rows.push(
+      <LedgerRow
+        key={entry.hash}
+        entry={entry}
+        copiedHash={copiedHash}
+        onCopy={onCopy}
+        highlighted={highlightHash === entry.hash}
+      />,
+    );
+  }
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[620px] border-collapse text-left">
+        <thead>
+          {/* Sticky because the full trail opens in a scrolling dialog, where a
+              header that scrolls away leaves six unlabelled columns. */}
+          <tr className="sticky top-0 z-10 bg-raised">
+            {COLUMNS.map((column) => (
+              <th
+                key={column.key}
+                scope="col"
+                className={`border-b border-line px-3 pb-2 pt-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-ink-subtle ${column.className}`}
+              >
+                {column.label}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-line">{rows}</tbody>
+      </table>
+    </div>
   );
 }
 
 export default function LedgerPage() {
   const { ledger, chainVerification, discardedEntryCount, investigation, resolveInvestigation } =
     useColdChain();
+  const exportReport = useReportExport();
+  const resolving = useCapability("resolveInvestigation");
   const [query, setQuery] = useState("");
-  const [hashQuery, setHashQuery] = useState("");
   const [filter, setFilter] = useState<FilterKey>("all");
   const [copiedHash, setCopiedHash] = useState<string | null>(null);
   const [fullOpen, setFullOpen] = useState(false);
@@ -177,6 +355,7 @@ export default function LedgerPage() {
       return (
         String(entry.sequence).includes(term) ||
         entry.event.toLowerCase().includes(term) ||
+        shortEventLabel(entry.event).toLowerCase().includes(term) ||
         entry.detail.toLowerCase().includes(term) ||
         entry.hash.toLowerCase().includes(term) ||
         formatClock(entry.at).includes(term) ||
@@ -184,6 +363,15 @@ export default function LedgerPage() {
       );
     });
   }, [newestFirst, filter, query]);
+
+  // A pasted digest is a lookup, not a text search: it gets an answer of its
+  // own above the list, because "no rows matched" is the wrong way to report
+  // that a digest is not in the chain.
+  const digestQuery = isDigestQuery(query);
+  const digestMatch = useMemo(
+    () => (digestQuery ? findByDigest(ledger, query) : null),
+    [digestQuery, ledger, query],
+  );
 
   const handleCopy = async (hash: string) => {
     try {
@@ -196,7 +384,7 @@ export default function LedgerPage() {
     }
   };
 
-  const handleExport = () => {
+  const handleExportCsv = () => {
     const csv = toCsv(
       ["sequence", "event", "detail", "timestamp", "prev_hash", "hash"],
       ledger.map((entry) => [
@@ -212,13 +400,8 @@ export default function LedgerPage() {
     downloadCsv(`vault-ledger-${stamp}.csv`, csv);
   };
 
-  const rows: LedgerEntry[] = filtered.slice(0, 12);
+  const rows = filtered.slice(0, VISIBLE_ROWS);
   const isTrustworthy = chainVerification.intact && discardedEntryCount === 0;
-  const hashLookup = useMemo(() => {
-    const value = hashQuery.trim().toLowerCase();
-    if (!value) return null;
-    return ledger.find((entry) => entry.hash.toLowerCase() === value) ?? false;
-  }, [hashQuery, ledger]);
 
   const coveredExcursions = investigation.openEntry
     ? coveredExcursionSequences(ledger, investigation.openEntry.sequence - 1)
@@ -241,15 +424,21 @@ export default function LedgerPage() {
       <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-[21px] font-semibold tracking-[-0.02em] text-ink">Ledger</h1>
-          <p className="mt-1 max-w-[52ch] text-[13.5px] text-ink-muted">
-            Append-only trail. Each entry commits to its own contents and to the previous entry's
-            digest, so any edit breaks verification from that point on.
+          <p className="mt-1 max-w-[54ch] text-[13.5px] text-ink-muted">
+            Append-only. Each entry commits to its own contents and to the previous entry's digest,
+            so any edit breaks verification from that point on.
           </p>
         </div>
-        <Button variant="outline" onClick={handleExport} className="h-9 shrink-0 gap-2 text-sm">
-          <Download size={15} aria-hidden="true" />
-          Export CSV
-        </Button>
+        <div className="flex shrink-0 gap-2">
+          <Button variant="outline" onClick={handleExportCsv} className="h-9 gap-2 text-sm">
+            <Download size={15} aria-hidden="true" />
+            CSV
+          </Button>
+          <Button variant="outline" onClick={exportReport} className="h-9 gap-2 text-sm">
+            <FileText size={15} aria-hidden="true" />
+            Report PDF
+          </Button>
+        </div>
       </header>
 
       {backendCount !== null && (
@@ -259,74 +448,77 @@ export default function LedgerPage() {
         </div>
       )}
 
-      {/* Chain verification — recomputed from the stored entries, not asserted.
-          Entries that were unreadable on load count against integrity too: a
-          shortened chain that verifies is still evidence something rewrote it. */}
-      <div
-        className={`flex items-start gap-3 rounded-lg border p-3.5 shadow-e1 ${
-          isTrustworthy
-            ? "border-line bg-raised"
-            : "border-warning-line bg-warning-soft dark:border-warning/40"
-        }`}
-      >
-        {isTrustworthy ? (
-          <ShieldCheck size={17} className="mt-px shrink-0 text-success" aria-hidden="true" />
-        ) : (
-          <ShieldAlert size={17} className="mt-px shrink-0 text-warning" aria-hidden="true" />
-        )}
-        <div>
-          <p className="text-[13.5px] font-medium text-ink">
-            {chainVerification.intact
-              ? isTrustworthy
-                ? `Chain verified — ${ledger.length} ${ledger.length === 1 ? "entry" : "entries"}`
-                : "Chain incomplete"
-              : `Chain broken at entry #${chainVerification.brokenAt}`}
-          </p>
-          <p className="mt-0.5 text-[13px] text-ink-muted">
-            {describeVerification(chainVerification)}
-          </p>
-          {discardedEntryCount > 0 && (
-            <p className="mt-1 text-[13px] text-warning">
-              {discardedEntryCount} stored{" "}
-              {discardedEntryCount === 1 ? "entry was" : "entries were"} unreadable and had to be
-              dropped on load.
+      {/* Chain verification and Investigation status, side by side. One is a
+          cryptographic fact and the other a workflow fact: they are shown
+          together because they are read together, and kept visually distinct
+          because a chain can be Intact and Under Investigation at once. */}
+      <div className="grid gap-3 lg:grid-cols-2">
+        <div
+          className={`flex items-start gap-3 rounded-lg border p-3.5 shadow-e1 ${
+            isTrustworthy ? "border-line bg-raised" : "border-warning-line bg-warning-soft dark:border-warning/40"
+          }`}
+        >
+          {isTrustworthy ? (
+            <ShieldCheck size={17} className="mt-px shrink-0 text-success" aria-hidden="true" />
+          ) : (
+            <ShieldAlert size={17} className="mt-px shrink-0 text-warning" aria-hidden="true" />
+          )}
+          <div>
+            <p className="text-[13.5px] font-medium text-ink">
+              {chainVerification.intact
+                ? isTrustworthy
+                  ? `Chain verified — ${ledger.length} ${ledger.length === 1 ? "entry" : "entries"}`
+                  : "Chain incomplete"
+                : `Chain broken at entry #${chainVerification.brokenAt}`}
             </p>
+            <p className="mt-0.5 text-[13px] text-ink-muted">
+              {describeVerification(chainVerification)}
+            </p>
+            {discardedEntryCount > 0 && (
+              <p className="mt-1 text-[13px] text-warning">
+                {discardedEntryCount} stored{" "}
+                {discardedEntryCount === 1 ? "entry was" : "entries were"} unreadable and had to be
+                dropped on load.
+              </p>
+            )}
+          </div>
+        </div>
+
+        <div
+          className={`flex items-start gap-3 rounded-lg border p-3.5 shadow-e1 ${
+            investigation.status === "CLEARED"
+              ? "border-line bg-raised"
+              : "border-warning-line bg-warning-soft dark:border-warning/40"
+          }`}
+        >
+          {investigation.status === "CLEARED" ? (
+            <ClipboardCheck size={17} className="mt-px shrink-0 text-success" aria-hidden="true" />
+          ) : (
+            <ClipboardList size={17} className="mt-px shrink-0 text-warning" aria-hidden="true" />
+          )}
+          <div className="min-w-0 flex-1">
+            <p className="text-[13.5px] font-medium text-ink">
+              {investigation.status === "CLEARED" ? "Cleared" : "Under investigation"}
+            </p>
+            <p className="mt-0.5 text-[13px] text-ink-muted">
+              {investigation.status === "CLEARED"
+                ? "No open investigation."
+                : `Opened ${formatClock(investigation.openEntry!.at)} on ${formatIsoDate(investigation.openEntry!.at)} — ${
+                    coveredExcursions.length
+                  } ${coveredExcursions.length === 1 ? "excursion" : "excursions"} absorbed so far.`}
+            </p>
+          </div>
+          {investigation.status === "UNDER_INVESTIGATION" && (
+            <Button
+              onClick={openResolveDialog}
+              disabled={!resolving.allowed}
+              title={resolving.reason ?? undefined}
+              className="h-8 shrink-0 text-[13px]"
+            >
+              Resolve
+            </Button>
           )}
         </div>
-      </div>
-
-      {/* Investigation status — independent of chain verification above. A
-          chain can be Intact and Under Investigation at once, or Cleared and
-          broken: one is a cryptographic fact, the other a workflow fact. */}
-      <div
-        className={`flex items-start gap-3 rounded-lg border p-3.5 shadow-e1 ${
-          investigation.status === "CLEARED"
-            ? "border-line bg-raised"
-            : "border-warning-line bg-warning-soft dark:border-warning/40"
-        }`}
-      >
-        {investigation.status === "CLEARED" ? (
-          <ClipboardCheck size={17} className="mt-px shrink-0 text-success" aria-hidden="true" />
-        ) : (
-          <ClipboardList size={17} className="mt-px shrink-0 text-warning" aria-hidden="true" />
-        )}
-        <div className="min-w-0 flex-1">
-          <p className="text-[13.5px] font-medium text-ink">
-            {investigation.status === "CLEARED" ? "Cleared" : "Under investigation"}
-          </p>
-          <p className="mt-0.5 text-[13px] text-ink-muted">
-            {investigation.status === "CLEARED"
-              ? "No open investigation."
-              : `Opened ${formatClock(investigation.openEntry!.at)} on ${formatIsoDate(investigation.openEntry!.at)} — ${
-                  coveredExcursions.length
-                } ${coveredExcursions.length === 1 ? "excursion" : "excursions"} absorbed so far. Resolving requires a reason and a note.`}
-          </p>
-        </div>
-        {investigation.status === "UNDER_INVESTIGATION" && (
-          <Button onClick={openResolveDialog} className="h-8 shrink-0 text-[13px]">
-            Resolve investigation
-          </Button>
-        )}
       </div>
 
       <div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
@@ -339,8 +531,8 @@ export default function LedgerPage() {
           <Input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            placeholder="Search sequence, event, detail or hash"
-            aria-label="Search the ledger"
+            placeholder="Search the trail, or paste a digest"
+            aria-label="Search the ledger, or paste a digest to look it up"
             className="h-9 pl-8 text-[13.5px]"
           />
         </div>
@@ -366,51 +558,62 @@ export default function LedgerPage() {
         </div>
       </div>
 
-      <Card render={<section />} className="border-brand-line bg-brand-soft/45 p-4 sm:p-5">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-          <div><p className="text-[13.5px] font-semibold text-ink">Find a retained entry</p><p className="mt-1 text-[12.5px] text-ink-muted">Paste a full SHA-256 hash to locate its event and predecessor link.</p></div>
-          <div className="flex w-full max-w-[470px] gap-2"><Input value={hashQuery} onChange={(event) => setHashQuery(event.target.value)} placeholder="Paste entry hash…" aria-label="Find an entry by full hash" className="h-9 bg-raised font-mono text-[12px]" /><Button variant="outline" onClick={() => setHashQuery("")} disabled={!hashQuery} className="h-9 shrink-0 text-sm">Clear</Button></div>
+      {digestQuery && (
+        <div
+          className={`flex items-start gap-3 rounded-lg border p-3.5 ${
+            digestMatch ? "border-brand-line bg-brand-soft" : "border-line bg-sunken"
+          }`}
+        >
+          <Fingerprint
+            size={17}
+            className={`mt-px shrink-0 ${digestMatch ? "text-brand-ink" : "text-ink-subtle"}`}
+            aria-hidden="true"
+          />
+          <div className="min-w-0">
+            {digestMatch ? (
+              <>
+                <p className="text-[13.5px] font-medium text-ink">
+                  Digest found — entry #{digestMatch.sequence}, {shortEventLabel(digestMatch.event)}
+                </p>
+                <p className="mt-0.5 text-[13px] text-ink-muted">
+                  {digestMatch.detail} · recorded {formatIsoDate(digestMatch.at)} at{" "}
+                  {formatClock(digestMatch.at)}. It is highlighted in the trail below.
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="text-[13.5px] font-medium text-ink">
+                  No retained entry carries this digest
+                </p>
+                {/* Two very different situations produce this result and the
+                    chain cannot tell them apart, so neither does this copy. */}
+                <p className="mt-0.5 text-[13px] text-ink-muted">
+                  Either it was never written here, or it belonged to an entry that has since slid
+                  out of the retained window. This browser holds {ledger.length} entries and cannot
+                  distinguish the two.
+                </p>
+              </>
+            )}
+          </div>
         </div>
-        {hashLookup && typeof hashLookup !== "boolean" && <div className="mt-4 grid gap-3 rounded-lg border border-brand-line bg-raised p-3.5 sm:grid-cols-[auto_1fr_auto] sm:items-center"><span className="grid h-8 w-8 place-items-center rounded-full bg-success-soft text-success"><ShieldCheck size={15} aria-hidden="true" /></span><div className="min-w-0"><p className="text-[13px] font-medium text-ink">Entry #{hashLookup.sequence} · {formatEventLabel(hashLookup.event)}</p><p className="mt-1 truncate text-[12.5px] text-ink-muted">{hashLookup.detail} · {formatIsoDate(hashLookup.at)} {formatClock(hashLookup.at)}</p></div><HashButton hash={hashLookup.hash} copiedHash={copiedHash} onCopy={handleCopy} /></div>}
-        {hashLookup === false && <p className="mt-3 rounded-lg border border-warning-line bg-warning-soft px-3 py-2.5 text-[12.5px] text-warning">No retained entry matches that hash. Check the full value or whether the entry has aged out of the local window.</p>}
-      </Card>
+      )}
 
       <Card className="overflow-hidden">
-        <div className="flex items-center justify-between border-b border-line bg-sunken/60 px-4 py-3 sm:px-5">
-          <div><p className="text-[13.5px] font-semibold text-ink">Chain, in sequence</p><p className="mt-0.5 text-[12px] text-ink-muted">Newest evidence first · each row links to the next digest</p></div>
-          <span className="hidden rounded-md border border-line bg-raised px-2 py-1 font-mono text-[10px] text-ink-subtle sm:inline-flex">{rows.length.toString().padStart(2, "0")} shown</span>
-        </div>
-        {rows.length === 0 ? (
-          <div className="py-14 text-center text-[13px] text-ink-muted">{query.trim() ? `No entries match “${query.trim()}”.` : "No entries yet."}</div>
-        ) : (
-          <ol className="divide-y divide-line">
-            {rows.map((entry, index) => {
-              const temp = readingValue(entry);
-              const isLast = index === rows.length - 1;
-              return (
-                <li key={entry.hash} className="grid grid-cols-[40px_minmax(0,1fr)] gap-3 px-4 py-4 sm:grid-cols-[56px_minmax(0,1fr)_150px_122px] sm:gap-4 sm:px-5">
-                  <div className="relative flex justify-center">
-                    {!isLast && <span className="absolute left-1/2 top-7 h-[calc(100%+1rem)] w-px -translate-x-1/2 bg-line" aria-hidden="true" />}
-                    <span className={`relative z-10 grid h-7 w-7 place-items-center rounded-full border ${entry.event === "TEMPERATURE_READING" ? "border-line bg-raised text-ink-subtle" : eventTone(entry.event) === "warning" ? "border-warning-line bg-warning-soft text-warning" : "border-brand-line bg-brand-soft text-brand"}`}><CircleDot size={13} aria-hidden="true" /></span>
-                  </div>
-                  <div className="min-w-0">
-                    <div className="flex flex-wrap items-center gap-2"><StatusPill tone={eventTone(entry.event)}>{eventShortLabel(entry.event)}</StatusPill><span className="font-mono text-[11px] text-ink-subtle">#{String(entry.sequence).padStart(3, "0")}</span></div>
-                    <p className="mt-2 text-[13.5px] leading-snug text-ink">{temp ? "Corridor reading captured" : entry.detail}</p>
-                    {temp && <p className="mt-0.5 text-[12px] text-ink-muted">{entry.detail}</p>}
-                    <div className="mt-2 flex items-center gap-1.5 font-mono text-[11px] text-ink-subtle"><span>{formatIsoDate(entry.at)}</span><span aria-hidden="true">·</span><span>{formatClock(entry.at)}</span></div>
-                  </div>
-                  <div className="hidden items-center sm:flex"><div className="w-full rounded-lg border border-line bg-sunken/60 px-3 py-2"><p className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ink-subtle">{temp ? "Temperature" : "Event context"}</p><p className="mt-1 truncate font-mono text-[12.5px] text-ink">{temp ?? entry.detail}</p></div></div>
-                  <div className="hidden items-center justify-end sm:flex"><div className="flex flex-col items-end gap-1"><span className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ink-subtle">Digest</span><HashButton hash={entry.hash} copiedHash={copiedHash} onCopy={handleCopy} /><span className="inline-flex items-center gap-1 text-[10px] text-ink-subtle"><Link2 size={11} aria-hidden="true" /> prev linked</span></div></div>
-                </li>
-              );
-            })}
-          </ol>
-        )}
+        <LedgerTable
+          entries={rows}
+          copiedHash={copiedHash}
+          onCopy={handleCopy}
+          highlightHash={digestMatch?.hash ?? null}
+          emptyMessage={query.trim() ? `Nothing in the trail matches “${query.trim()}”.` : "No entries yet."}
+        />
       </Card>
 
       <div className="flex flex-wrap items-center justify-between gap-2 text-[12.5px] text-ink-subtle">
         <span>
-          Showing {rows.length} of {filtered.length} matching · {ledger.length} retained
+          Showing {rows.length} of {filtered.length} matching · {ledger.length} retained ·{" "}
+          <span className="text-ink-muted">
+            each entry's Prev is the previous entry's digest; safe corridor {SAFE_MIN_C}–{SAFE_MAX_C} °C
+          </span>
         </span>
         <button
           type="button"
@@ -422,47 +625,24 @@ export default function LedgerPage() {
       </div>
 
       <Dialog open={fullOpen} onOpenChange={setFullOpen}>
-        <DialogContent className="max-h-[86vh] max-w-[820px] gap-0 overflow-hidden p-0">
+        <DialogContent className="max-h-[86vh] max-w-[760px] gap-0 overflow-hidden p-0">
           <DialogHeader className="border-b border-line p-5">
             <DialogTitle className="text-[15px] font-semibold tracking-[-0.01em]">
               Full trail — {filtered.length} {filtered.length === 1 ? "entry" : "entries"}
             </DialogTitle>
             <DialogDescription className="text-[13px] text-ink-muted">
-              Matching the current search and filter. Click a hash to copy it in full.
+              Matching the current search and filter. Click a digest to copy it in full.
             </DialogDescription>
           </DialogHeader>
 
           <div className="max-h-[58vh] overflow-auto">
-            <Table>
-              <TableHeader className="sticky top-0 z-10 bg-sunken">
-                <TableRow className="hover:bg-transparent">
-                  <TableHead className="w-[64px] text-[12px] text-ink-muted">Seq</TableHead>
-                  <TableHead className="w-[170px] text-[12px] text-ink-muted">Event</TableHead>
-                  <TableHead className="text-[12px] text-ink-muted">Detail</TableHead>
-                  <TableHead className="w-[140px] text-[12px] text-ink-muted">Recorded</TableHead>
-                  <TableHead className="w-[140px] text-right text-[12px] text-ink-muted">Hash</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filtered.map((entry) => (
-                  <TableRow key={entry.hash} className="border-line">
-                    <TableCell className="tabular py-2.5 font-mono text-[12.5px] text-ink-subtle">
-                      {String(entry.sequence).padStart(3, "0")}
-                    </TableCell>
-                    <TableCell className="py-2.5 text-[13px] text-ink">
-                      {formatEventLabel(entry.event)}
-                    </TableCell>
-                    <TableCell className="py-2.5 text-[13px] text-ink-muted">{entry.detail}</TableCell>
-                    <TableCell className="tabular py-2.5 font-mono text-[12px] text-ink-muted">
-                      {formatIsoDate(entry.at)} {formatClock(entry.at)}
-                    </TableCell>
-                    <TableCell className="py-2.5 text-right">
-                      <HashButton hash={entry.hash} copiedHash={copiedHash} onCopy={handleCopy} />
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+            <LedgerTable
+              entries={filtered}
+              copiedHash={copiedHash}
+              onCopy={handleCopy}
+              highlightHash={digestMatch?.hash ?? null}
+              emptyMessage="Nothing matches the current search and filter."
+            />
           </div>
 
           <div className="flex items-center justify-between gap-3 border-t border-line p-4">
@@ -477,7 +657,7 @@ export default function LedgerPage() {
               <Button variant="outline" onClick={() => setFullOpen(false)} className="h-9 text-sm">
                 Close
               </Button>
-              <Button onClick={handleExport} className="h-9 gap-2 text-sm">
+              <Button onClick={handleExportCsv} className="h-9 gap-2 text-sm">
                 <Download size={15} aria-hidden="true" />
                 Export CSV
               </Button>

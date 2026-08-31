@@ -1,15 +1,17 @@
 # Working in this repo
 
-Vault is a browser-only cold-chain console. No backend, no sensor, no auth.
-Read `README.md` for what it does; this file is how to change it without
-breaking the things that took an audit to fix.
+Vault is a cold-chain console that runs in the browser. No sensor — the
+readings are simulated. A backend is optional: `supabase/` adds organisations,
+roles, a server copy of the ledger and Telegram alerts, and the app runs
+identically without it. Read `README.md` for what it does; this file is how to
+change it without breaking the things that took an audit to fix.
 
 ## Commands
 
 ```bash
 npm run verify      # typecheck + lint + test + build -- the gate. Run before committing.
 npm run dev         # dev server
-npm test            # vitest, 80 tests
+npm test            # vitest, 178 tests
 ```
 
 `verify` is what CI runs. If it passes locally it passes there, with one
@@ -24,6 +26,8 @@ exception noted under [Gotchas](#gotchas).
 | `src/context/ColdChainContext.tsx` | Simulation loop, ledger appends, persistence. |
 | `src/pages/`, `src/components/` | Rendering. |
 | `src/components/ui/` | shadcn/Base UI primitives. Generated -- change only with reason. |
+| `src/context/AuthContext.tsx` | Session, organisations, active org and role. |
+| `supabase/schema.sql` | Tables, role helpers, every RLS policy. The enforcement. |
 
 The split is deliberate: `src/lib` is where the test suite lives, so logic that
 matters belongs there rather than inside a component. If you are writing an
@@ -76,6 +80,22 @@ layer asserting guarantees the state layer never provided. Before writing
 "every", "always", "proves" or "immutable", check the code does that. The
 ledger is tamper *evidence* for retained entries, not tamper *proofing* -- it
 lives in unsigned local storage and the copy says so.
+
+**The backend is additive, never a prerequisite.** Every feature must work
+with `VITE_SUPABASE_URL` unset. `supabase` is `null` in that build, and every
+call site takes its local path. This is not a fallback bolted on afterwards --
+it is why the console can be opened, demonstrated and audited without
+provisioning anything, and a change that breaks it breaks the product.
+
+**`src/lib/roles.ts` is a copy, not the authority.** The RLS policies in
+`supabase/schema.sql` decide what may happen; the client's table exists so the
+UI can stop offering an action that would be refused. If you change one, change
+both -- `roles.test.ts` pins the ranks to `public.role_rank`.
+
+**Server rows are untrusted too.** A row read back goes through `isLedgerEntry`
+exactly like a value out of `localStorage`, and the chain it forms goes back
+through `verifyChain`. Harder to tamper with is not the same as trusted
+unverified.
 
 ## The ledger
 

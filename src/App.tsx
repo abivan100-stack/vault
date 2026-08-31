@@ -4,7 +4,9 @@ import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-do
 import {
   Activity,
   Bell,
+  Building2,
   ChevronDown,
+  CloudOff,
   CircleHelp,
   Database,
   Moon,
@@ -14,16 +16,12 @@ import {
   Truck,
   TriangleAlert,
   ShieldCheck,
-  ActivitySquare,
-  Cable,
-  CircleCheck,
-  Fingerprint,
-  HelpCircle,
-  Thermometer,
-  Wrench,
 } from "lucide-react";
 import { ColdChainProvider, useColdChain } from "@/context/ColdChainContext";
-import { Button } from "@/components/ui/button";
+import { AuthProvider, useAuth } from "@/context/AuthContext";
+import { LedgerSyncProvider } from "@/hooks/useLedgerSync";
+import { roleLabel } from "@/lib/roles";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -37,18 +35,7 @@ import LoadingScreen from "@/components/LoadingScreen";
 import { useAnime } from "@/hooks/useAnime";
 import { formatClock } from "@/lib/simulation";
 import { formatEventLabel, type LedgerEntry } from "@/lib/ledger";
-import { SAFE_MAX_C, SAFE_MIN_C } from "@/lib/chart";
 import { fadeInUp, fadeOut, prefersReducedMotion } from "@/lib/motion";
-
-/**
- * The prototype has no authentication. The operator block is clearly labelled
- * as demo data so it is never mistaken for a signed-in user.
- */
-const DEMO_OPERATOR = {
-  initials: "RK",
-  name: "Raghav K.",
-  role: "Demo operator",
-} as const;
 
 const NAV_ITEMS = [
   { to: "/monitor", label: "Monitor", icon: Activity },
@@ -141,150 +128,6 @@ function NotificationsDialog({
   );
 }
 
-function HelpDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
-  const sections = [
-    ["start", "Getting started", CircleCheck],
-    ["flow", "Shipment flow", Package],
-    ["temperature", "Temperature & breaches", Thermometer],
-    ["integrity", "Ledger & integrity", Fingerprint],
-    ["hardware", "Hardware connection", Cable],
-    ["verify", "Verification & hashes", ActivitySquare],
-    ["troubleshoot", "Troubleshooting", Wrench],
-    ["faq", "FAQ", HelpCircle],
-  ] as const;
-
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="grid h-[min(820px,calc(100vh-2rem))] w-[min(960px,calc(100vw-2rem))] !max-w-none grid-rows-[auto_minmax(0,1fr)_auto] gap-0 overflow-hidden p-0 sm:!max-w-none">
-        <DialogHeader className="border-b border-line bg-raised px-6 py-6 sm:px-8">
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-            <div className="max-w-[600px]">
-              <div className="mb-3 flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-brand">
-                <span className="grid h-6 w-6 place-items-center rounded-md bg-brand-soft">
-                  <CircleHelp size={14} aria-hidden="true" />
-                </span>
-                Vault field guide
-              </div>
-              <DialogTitle className="text-[clamp(1.35rem,2vw,1.8rem)] font-semibold tracking-[-0.03em]">
-                A clearer way to read the console
-              </DialogTitle>
-              <DialogDescription className="mt-2 max-w-[570px] text-[13.5px] leading-relaxed text-ink-muted">
-                Use this guide to move from a live reading to a defensible handoff. Vault receives the ESP32
-                feed through its local API and records the operating context around each reading.
-              </DialogDescription>
-            </div>
-            <div className="w-full rounded-lg border border-brand-line bg-brand-soft px-3.5 py-3 text-[12px] leading-snug text-brand-ink lg:w-[220px] lg:shrink-0">
-              <p className="font-semibold">Prototype boundary</p>
-              <p className="mt-1 opacity-80">Treat the ledger as tamper evidence, not a signed guarantee.</p>
-            </div>
-          </div>
-        </DialogHeader>
-
-        <div className="grid min-h-0 lg:grid-cols-[220px_minmax(0,1fr)]">
-          <nav className="hidden border-r border-line bg-sunken/45 p-4 lg:block" aria-label="Help sections">
-            <p className="px-2 pb-2 text-[10px] font-semibold uppercase tracking-[0.12em] text-ink-subtle">In this guide</p>
-            <div className="space-y-0.5">
-              {sections.map(([id, label, Icon]) => (
-                <a key={id} href={`#help-${id}`} className="flex items-center gap-2 rounded-md px-2 py-2 text-[12.5px] text-ink-muted transition-colors hover:bg-raised hover:text-ink">
-                  <Icon size={14} aria-hidden="true" />
-                  {label}
-                </a>
-              ))}
-            </div>
-          </nav>
-
-          <div className="min-h-0 overflow-auto px-5 py-6 sm:px-8">
-            <div className="space-y-8">
-              <section id="help-start" className="scroll-mt-5">
-                <SectionHeading number="01" title="Getting started" subtitle="Orient yourself in under a minute." />
-                <div className="mt-4 grid grid-cols-[repeat(auto-fit,minmax(165px,1fr))] gap-3">
-                  {[["01", "Read Monitor", "Watch the live corridor and the last 30 readings."], ["02", "Open Shipment", "Check the box, batch, route, and handoff state."], ["03", "Inspect Ledger", "Follow the retained events and run verification."]].map(([n, title, copy]) => (
-                    <div key={n} className="rounded-lg border border-line bg-raised p-3.5 shadow-e1">
-                      <span className="font-mono text-[11px] text-brand">{n}</span>
-                      <h4 className="mt-2 text-[13px] font-semibold text-ink">{title}</h4>
-                      <p className="mt-1 text-[12.5px] leading-relaxed text-ink-muted">{copy}</p>
-                    </div>
-                  ))}
-                </div>
-              </section>
-
-              <section id="help-flow" className="scroll-mt-5">
-                <SectionHeading number="02" title="Shipment flow" subtitle="The console models one box from loading bay to handoff." />
-                <div className="mt-4 flex flex-wrap items-center gap-2 text-[12px]">
-                  {[["Shipment → Manage", "edit fields"], ["Monitor", "watch corridor"], ["Ledger", "audit events"], ["Handoff", "close the route"]].map(([title, copy], index) => (
-                    <div key={title} className="flex items-center gap-2">
-                      <div className="rounded-md border border-line bg-sunken px-3 py-2"><span className="font-medium text-ink">{title}</span><span className="ml-1.5 text-ink-subtle">· {copy}</span></div>
-                      {index < 3 && <span className="text-ink-subtle" aria-hidden="true">→</span>}
-                    </div>
-                  ))}
-                </div>
-                <p className="mt-3 text-[13px] leading-relaxed text-ink-muted">Edits, resets, new shipments, and handoffs are confirmed before they are written as ledger events. Handoff is permanent for the current record.</p>
-              </section>
-
-              <section id="help-temperature" className="scroll-mt-5">
-                <SectionHeading number="03" title="Temperature & breaches" subtitle={`The safe corridor is ${SAFE_MIN_C}–${SAFE_MAX_C} °C.`} />
-                <div className="mt-4 grid grid-cols-[repeat(auto-fit,minmax(165px,1fr))] gap-3">
-                  <StateCard label="SAFE" tone="success" copy="Reading sits inside the corridor." />
-                  <StateCard label="EXCURSION" tone="warning" copy="A reading crossed a boundary; the moment is logged." />
-                  <StateCard label="RECOVERED" tone="brand" copy="Readings returned inside the corridor." />
-                </div>
-                <p className="mt-3 text-[13px] leading-relaxed text-ink-muted">The ESP32 samples its sensor every 2 seconds, uploads the latest reading every 5 seconds, and Vault records the received device events in its backend ledger.</p>
-              </section>
-
-              <section id="help-integrity" className="scroll-mt-5">
-                <SectionHeading number="04" title="Ledger & integrity" subtitle="A chronological trail with a checkable chain." />
-                <div className="mt-4 rounded-lg border border-line bg-raised p-4 shadow-e1">
-                  <div className="flex flex-wrap items-center gap-2 font-mono text-[11px] text-ink-subtle"><span className="rounded bg-sunken px-2 py-1">entry 014</span><span>prevHash</span><span className="text-brand">→</span><span className="rounded bg-brand-soft px-2 py-1 text-brand-ink">digest</span><span className="text-brand">→</span><span className="rounded bg-sunken px-2 py-1">entry 015</span></div>
-                  <p className="mt-3 text-[13px] leading-relaxed text-ink-muted">Each retained entry commits to its sequence, event, timestamp, detail, and predecessor digest. Verification can surface edited contents, broken links, ordering problems, or an incomplete stored chain.</p>
-                </div>
-              </section>
-
-              <section id="help-hardware" className="scroll-mt-5">
-                <SectionHeading number="05" title="Hardware connection" subtitle="ESP32 readings arrive through the local Vault API." />
-                <div className="mt-4 rounded-lg border border-brand-line bg-brand-soft p-4"><p className="text-[13px] font-semibold text-ink">ESP32 → Vault API → Monitor</p><p className="mt-1 text-[13px] leading-relaxed text-ink-muted">The ESP32 samples the DHT22, uploads its latest reading every 5 seconds, and polls for alarm acknowledgements. Monitor refreshes from the local API; keep the API running and the board on the same network.</p></div>
-              </section>
-
-              <section id="help-verify" className="scroll-mt-5">
-                <SectionHeading number="06" title="Verification & hashes" subtitle="Use the ledger page when a record needs a second look." />
-                <p className="mt-4 text-[13px] leading-relaxed text-ink-muted">Open Ledger, use the status summary, and expand an entry to inspect its digest and predecessor. An <span className="font-medium text-ink">OK</span> verdict means the retained entries recompute and link; it does not authenticate the device or prove a whole-storage replacement did not happen.</p>
-              </section>
-
-              <section id="help-troubleshoot" className="scroll-mt-5">
-                <SectionHeading number="07" title="Troubleshooting" subtitle="A few quick checks before clearing anything." />
-                <div className="mt-4 grid grid-cols-[repeat(auto-fit,minmax(220px,1fr))] gap-3"><Tip title="The reading is not moving" copy="Check that the API is running and the ESP32 is connected to the same network. Monitor refreshes readings automatically." /><Tip title="Verification is incomplete" copy="Some stored entries were unreadable. Preserve the reported state; use the recovery action only when you accept losing local demo data." /><Tip title="I need to change shipment details" copy="Go to Shipment → Manage. Read-only pages intentionally do not mutate the record." /><Tip title="I need a clean demo" copy="Create a new shipment from Manage. The append-only ledger records that transition instead of erasing history." /></div>
-              </section>
-
-              <section id="help-faq" className="scroll-mt-5">
-                <SectionHeading number="08" title="FAQ" subtitle="Short answers for the questions that come up most." />
-                <div className="mt-4 divide-y divide-line rounded-lg border border-line bg-raised px-4 shadow-e1">{[["Does Vault send data anywhere?", "In hardware mode, the ESP32 sends readings to the local Vault API running on this computer. The browser reads that API to render the console."], ["Is the ledger blockchain?", "No. It is a SHA-256 hash chain designed to make retained changes visible."], ["Can I use this as a validated medical monitor?", "No. The DHT22 prototype and this local software are not medically validated."], ["What does the chart remember?", "Monitor shows the latest 30 device readings. The API retains the uploaded readings and backend ledger events."]].map(([q, a]) => <div key={q} className="py-3.5"><h4 className="text-[13px] font-semibold text-ink">{q}</h4><p className="mt-1 text-[12.5px] leading-relaxed text-ink-muted">{a}</p></div>)}</div>
-              </section>
-            </div>
-          </div>
-        </div>
-
-        <div className="flex justify-end border-t border-line p-4">
-          <Button onClick={() => onOpenChange(false)} className="h-9 px-5 text-sm">
-            Got it
-          </Button>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
-
-function SectionHeading({ number, title, subtitle }: { number: string; title: string; subtitle: string }) {
-  return <div className="flex items-start gap-3"><span className="pt-0.5 font-mono text-[11px] text-brand">{number}</span><div><h3 className="text-[15px] font-semibold tracking-[-0.01em] text-ink">{title}</h3><p className="mt-1 text-[12.5px] text-ink-muted">{subtitle}</p></div></div>;
-}
-
-function StateCard({ label, tone, copy }: { label: string; tone: "success" | "warning" | "brand"; copy: string }) {
-  const toneClasses = { success: "bg-success-soft text-success", warning: "bg-warning-soft text-warning", brand: "bg-brand-soft text-brand-ink" };
-  return <div className="rounded-lg border border-line bg-raised p-3.5 shadow-e1"><span className={`inline-flex rounded-md px-2 py-1 text-[10px] font-semibold tracking-[0.08em] ${toneClasses[tone]}`}>{label}</span><p className="mt-2 text-[12.5px] leading-relaxed text-ink-muted">{copy}</p></div>;
-}
-
-function Tip({ title, copy }: { title: string; copy: string }) {
-  return <div className="rounded-lg border border-line bg-raised p-3.5 shadow-e1"><h4 className="text-[13px] font-semibold text-ink">{title}</h4><p className="mt-1 text-[12.5px] leading-relaxed text-ink-muted">{copy}</p></div>;
-}
-
 function CommandPalette({
   open,
   onOpenChange,
@@ -300,7 +143,9 @@ function CommandPalette({
       { label: "Go to Monitor", path: "/monitor", icon: Activity, keywords: "monitor temperature chart live" },
       { label: "Open Ledger", path: "/ledger", icon: Database, keywords: "ledger hash audit trail export" },
       { label: "Shipment overview", path: "/shipment", icon: Package, keywords: "shipment box batch route" },
-      { label: "Manage shipment", path: "/shipment/manage", icon: Truck, keywords: "edit handoff new reset manage" },
+      { label: "Manage shipment", path: "/shipment/manage", icon: Truck, keywords: "edit handoff new reset manage export report pdf" },
+      { label: "How Vault works", path: "/help", icon: CircleHelp, keywords: "help manual docs guide glossary verification limits" },
+      { label: "Organisation", path: "/organisation", icon: Building2, keywords: "account org members roles invite telegram alerts sync sign out" },
     ],
     [],
   );
@@ -377,10 +222,78 @@ function CommandPalette({
   );
 }
 
+/**
+ * Who is signed in, and into what.
+ *
+ * This used to be a hardcoded "Demo operator", clearly labelled as such
+ * because the prototype had no authentication. It has one now, and the block
+ * states the true position in all four of its states — including the two that
+ * are not "signed in", which are the ones a person needs told: running with
+ * no backend at all, and running with one but signed out.
+ */
+function AccountBlock() {
+  const { status, user, activeOrg, role } = useAuth();
+
+  if (status === "UNCONFIGURED") {
+    return (
+      <span
+        className="hidden items-center gap-2 border-l border-line pl-3 xl:flex"
+        title="No backend is configured. The ledger lives in this browser only."
+      >
+        <span className="grid h-8 w-8 place-items-center rounded-full bg-sunken text-ink-subtle">
+          <CloudOff size={15} aria-hidden="true" />
+        </span>
+        <span className="leading-none">
+          <span className="block whitespace-nowrap text-[13px] font-medium text-ink">Local only</span>
+          <span className="mt-1 block whitespace-nowrap text-[11.5px] text-ink-subtle">
+            No backend
+          </span>
+        </span>
+      </span>
+    );
+  }
+
+  if (status !== "SIGNED_IN" || !user) {
+    return (
+      <Link
+        to="/signin"
+        className={buttonVariants({
+          variant: "outline",
+          size: "lg",
+          className: "hidden whitespace-nowrap text-[13px] xl:inline-flex",
+        })}
+      >
+        {status === "LOADING" ? "…" : "Sign in"}
+      </Link>
+    );
+  }
+
+  const label = user.email ?? "Signed in";
+  return (
+    <Link
+      to="/organisation"
+      className="hidden items-center gap-2 border-l border-line pl-3 transition-colors hover:text-ink xl:flex"
+      title={activeOrg ? `${label} — ${activeOrg.name}` : label}
+    >
+      <span className="grid h-8 w-8 place-items-center rounded-full bg-sunken font-mono text-[12px] font-semibold text-ink-muted">
+        {label.slice(0, 2).toUpperCase()}
+      </span>
+      <span className="leading-none">
+        <span className="block max-w-[140px] truncate text-[13px] font-medium text-ink">
+          {activeOrg?.name ?? "No organisation"}
+        </span>
+        <span className="mt-1 block whitespace-nowrap text-[11.5px] text-ink-subtle">
+          {role ? roleLabel(role) : "No role"}
+        </span>
+      </span>
+      <ChevronDown size={14} className="text-ink-subtle" aria-hidden="true" />
+    </Link>
+  );
+}
+
 function Header({ isDark, onToggleTheme }: { isDark: boolean; onToggleTheme: () => void }) {
   const { status, isMonitoring, unreadNotificationCount, notifications, markNotificationsRead } =
     useColdChain();
-  const [helpOpen, setHelpOpen] = useState(false);
   const [commandOpen, setCommandOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
 
@@ -391,7 +304,6 @@ function Header({ isDark, onToggleTheme }: { isDark: boolean; onToggleTheme: () 
       if (typeof event.key !== "string") return;
       if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== "k") return;
       event.preventDefault();
-      setHelpOpen(false);
       setNotificationsOpen(false);
       setCommandOpen((previous) => !previous);
     };
@@ -498,34 +410,28 @@ function Header({ isDark, onToggleTheme }: { isDark: boolean; onToggleTheme: () 
                   has no `decorative` opt-out, so hide it explicitly — otherwise
                   browse-mode users get two content-free stops. */}
               <Separator orientation="vertical" className="h-4" aria-hidden="true" />
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setHelpOpen(true)}
-                className="rounded-md text-ink-muted"
+              {/* The manual is a page, not a dialog: it is the one place the
+                  product explains what its guarantees actually are, and it
+                  was the most cramped surface in the app while it was a
+                  540px modal stacked over whatever you were reading. */}
+              {/* A Link wearing the button's classes rather than `Button
+                  render={<Link/>}`: Base UI's Button asserts a native
+                  <button> underneath and warns when handed an anchor, and
+                  this genuinely is navigation. */}
+              <Link
+                to="/help"
                 aria-label="How Vault works"
+                className={buttonVariants({
+                  variant: "ghost",
+                  size: "icon",
+                  className: "rounded-md text-ink-muted",
+                })}
               >
                 <CircleHelp size={16} aria-hidden="true" />
-              </Button>
+              </Link>
             </div>
 
-            <div
-              className="hidden items-center gap-2 border-l border-line pl-2 xl:flex"
-              title="Demo account — this prototype has no authentication"
-            >
-              <span className="grid h-8 w-8 place-items-center rounded-full bg-sunken font-mono text-[12px] font-semibold text-ink-muted">
-                {DEMO_OPERATOR.initials}
-              </span>
-              <span className="leading-none">
-                <span className="block whitespace-nowrap text-[13px] font-medium text-ink">
-                  {DEMO_OPERATOR.name}
-                </span>
-                <span className="mt-1 block whitespace-nowrap text-[11.5px] text-ink-subtle">
-                  {DEMO_OPERATOR.role}
-                </span>
-              </span>
-              <ChevronDown size={14} className="text-ink-subtle" aria-hidden="true" />
-            </div>
+            <AccountBlock />
           </div>
         </div>
       </div>
@@ -543,7 +449,6 @@ function Header({ isDark, onToggleTheme }: { isDark: boolean; onToggleTheme: () 
       </div>
 
       <CommandPalette open={commandOpen} onOpenChange={setCommandOpen} />
-      <HelpDialog open={helpOpen} onOpenChange={setHelpOpen} />
       <NotificationsDialog
         open={notificationsOpen}
         onOpenChange={setNotificationsOpen}
@@ -572,7 +477,7 @@ function Layout({ isDark, onToggleTheme }: { isDark: boolean; onToggleTheme: () 
 
       <footer className="border-t border-line">
         <div
-          className={`${PAGE_CONTAINER} flex flex-col gap-1 py-5 text-[12.5px] text-ink-subtle sm:flex-row sm:items-center sm:justify-between`}
+          className={`${PAGE_CONTAINER} flex flex-col gap-1 py-5 text-[12.5px] text-ink-subtle sm:flex-row sm:items-center sm:justify-end`}
         >
           <span>Vault — live cold-chain monitoring.</span>
           <span className="font-mono">Build 0.1.0</span>
@@ -647,9 +552,13 @@ export default function App() {
   return (
     <>
       {loader !== "gone" && <LoadingScreen ref={loadingScreenRef} onFinished={finishLoading} />}
-      <ColdChainProvider>
-        <Layout isDark={isDark} onToggleTheme={toggleTheme} />
-      </ColdChainProvider>
+      <AuthProvider>
+        <ColdChainProvider>
+          <LedgerSyncProvider>
+            <Layout isDark={isDark} onToggleTheme={toggleTheme} />
+          </LedgerSyncProvider>
+        </ColdChainProvider>
+      </AuthProvider>
     </>
   );
 }

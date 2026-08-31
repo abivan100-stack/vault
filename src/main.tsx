@@ -3,10 +3,13 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import App from "./App";
 import ErrorBoundary from "./components/ErrorBoundary";
+import HelpPage from "./pages/HelpPage";
 import LandingPage from "./pages/LandingPage";
 import LedgerPage from "./pages/LedgerPage";
+import OrganisationPage from "./pages/OrganisationPage";
 import MonitorPage from "./pages/MonitorPage";
 import ShipmentManagePage from "./pages/ShipmentManagePage";
+import SignInPage from "./pages/SignInPage";
 import ShipmentPage from "./pages/ShipmentPage";
 import AccountPage from "./pages/AccountPage";
 import "./styles.css";
@@ -25,6 +28,9 @@ createRoot(rootElement).render(
             <Route index element={<LandingPage />} />
             <Route path="monitor" element={<MonitorPage />} />
             <Route path="ledger" element={<LedgerPage />} />
+            <Route path="help" element={<HelpPage />} />
+            <Route path="signin" element={<SignInPage />} />
+            <Route path="organisation" element={<OrganisationPage />} />
             <Route path="shipment" element={<ShipmentPage />} />
             <Route path="shipment/manage" element={<ShipmentManagePage />} />
             <Route path="account" element={<AccountPage />} />
